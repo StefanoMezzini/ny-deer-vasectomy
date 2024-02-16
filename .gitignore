@@ -49,10 +49,17 @@ po/*~
 rsconnect/
 
 # no need to include the data folder
-data/
+data/Year 1
+data/Year 2
 
 # ignore outlier diagnostic figures
 figures/outlier-diagnostics
 
 # ignore R project
 *.Rproj
+
+# ignore other unnecessary files
+data/OUF-parameters-year-1.xlsx
+data/outlier-diagnostics.zip
+example_data_*
+gps_inventa.csv
