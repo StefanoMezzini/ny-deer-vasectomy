@@ -47,3 +47,9 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# no need to include the data folder
+data/
+
+# ignore outlier diagnostic figures
+figures/outlier-diagnostics
