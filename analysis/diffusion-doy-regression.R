@@ -6,10 +6,12 @@ library('gratia')    # for predicting from models
 theme_set(theme_bw())
 
 d <- readRDS('data/years-1-and-2-data.rds') %>%
-  mutate(animal = factor(animal),
+  mutate(animal_year = factor(paste(animal, study_year)),
          study_year = factor(study_year),
          sex_treatment = factor(paste(sex, study_site)),
          s_t_y = factor(paste(sex, study_site, study_year)))
+
+plot(hr_est_95 ~ diffusion_est, d)
 
 # data is not continuous throughout the year
 hist(yday(d$date))
@@ -24,7 +26,7 @@ d <- mutate(d,
               # otherwise calculate days since Aug 1 of previous year 
               date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
               as.numeric(), # convert difftime to numeric
-            weight = 1 / (hr_upr_95 - hr_lwr_95)) %>% # account for HR uncertainty
+            weight = 1 / (diffusion_upr - diffusion_lwr)) %>% # account for HR uncertainty
   group_by(animal) %>%
   mutate(weight = weight / mean(weight)) %>% # normalize weights
   ungroup()
@@ -42,13 +44,13 @@ d %>%
 
 # plot the data ----
 # plot overall raw data
-ggplot(d, aes(days_since_aug_1, hr_est_95, group = animal)) +
+ggplot(d, aes(days_since_aug_1, diffusion_est, group = animal)) +
   facet_wrap(~ sex_treatment) +
   coord_cartesian(ylim = c(0, 15)) +
   geom_line()
 
 # using free scales to view cycles more clearly
-ggplot(d, aes(days_since_aug_1, hr_est_95)) +
+ggplot(d, aes(days_since_aug_1, diffusion_est)) +
   facet_wrap(~ sex_treatment, scales = 'free_y') +
   geom_vline(xintercept = 100, col = 'red') +
   geom_line(aes(group = animal)) +
@@ -57,39 +59,40 @@ ggplot(d, aes(days_since_aug_1, hr_est_95)) +
 # scaling by max home range
 d %>%
   group_by(animal) %>%
-  mutate(hr_rel = hr_est_95 / max(hr_est_95)) %>%
+  mutate(diffusion_rel = diffusion_est / max(diffusion_est)) %>%
   ungroup() %>%
-  ggplot(aes(days_since_aug_1, hr_rel, group = animal)) +
+  ggplot(aes(days_since_aug_1, diffusion_rel, group = animal)) +
   facet_wrap(~ sex_treatment, scales = 'free_y') +
   geom_vline(xintercept = 100, col = 'red') +
   geom_line()
 
 # find odd male from S Island
-filter(d, sex_treatment == 'm staten_island', hr_est_95 > 15) %>%
+filter(d, sex_treatment == 'm staten_island', diffusion_est > 15) %>%
   select(study_year, animal, Age)
 
 # find males with large HRs on Rockefeller
-filter(d, sex_treatment == 'm rockefeller', hr_est_95 > 7.5) %>%
+filter(d, sex_treatment == 'm rockefeller', diffusion_est > 7.5) %>%
   select(study_year, animal, Age)
 
 # start by fitting a Hierarchical Generalized Additive Model ----
-m_hr <- bam(hr_est_95 ~
+m_diff <- bam(diffusion_est ~
               # temporal sex- and treatment-level trends
-              s(days_since_aug_1, sex_treatment, k = 25, bs = 'fs') +
+              s(days_since_aug_1, sex_treatment, k = 15, bs = 'fs') +
               # accounts for differences between years
               s(days_since_aug_1, study_year, k = 5, bs = 'fs') +
               # random intercept for individual
-              s(days_since_aug_1, animal, k = 15, bs = 'fs'),
+              s(days_since_aug_1, animal_year, k = 15, bs = 'fs'),
             family = Gamma(link = 'log'),
             data = d,
             weights = weight,
             method = 'fREML',
             discrete = TRUE,
             control = gam.control(trace = TRUE))
+saveRDS(m_diff, paste0('models/m_diffusion_1-', Sys.Date(), '.rds'))
 
 summary(m_hr)
 
-plot(m_hr, pages = 1, trans = exp)
+plot(m_hr, pages = 1, trans = exp, scale = 0)
 
 preds <- expand.grid(date = seq(as.Date('2021-09-01'),
                                 as.Date('2022-05-30'),
@@ -130,10 +133,10 @@ ggplot(preds, aes(group = sex_treatment)) +
   theme(legend.position = 'top')
 
 # location-scale model ----
-m_hr_2 <- gam(list(
+m_diffusion_2 <- gam(list(
   
   # linear predictor for the mean
-  hr_est_95 ~
+  diffusion_est ~
     # temporal sex- and treatment-level trends
     s(days_since_aug_1, sex_treatment, k = 25, bs = 'fs') +
     # accounts for differences between years
@@ -149,9 +152,9 @@ m_hr_2 <- gam(list(
   method = 'REML',
   control = gam.control(trace = TRUE))
 
-saveRDS(m_hr_2, paste0('models/m_hr_2-', Sys.Date(), '.rds'))
+saveRDS(m_diffusion_2, paste0('models/m_diffusion_2-', Sys.Date(), '.rds'))
 
-plot(m_hr_2, pages = 1, all.terms = TRUE)
+plot(m_diffusion_2, pages = 1, all.terms = TRUE)
 
 preds_2 <-
   expand.grid(date = seq(as.Date('2021-09-01'),
@@ -173,7 +176,7 @@ preds_2 <-
          site = substr(sex_treatment, 3,
                        nchar(as.character(sex_treatment)))) %>%
   bind_cols(.,
-            predict(object = m_hr_2, newdata = ., type = 'response',
+            predict(object = m_diffusion_2, newdata = ., type = 'response',
                     se.fit = TRUE) %>%
               as.data.frame()) %>%
   mutate(mu = fit.1,
