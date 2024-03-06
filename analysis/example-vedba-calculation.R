@@ -16,7 +16,9 @@ accel_mat <- with(odba_data, cbind(acc_x_g, acc_y_g, acc_z_g))
 
 # I don't know what the values should be, so I'm just guessing...
 tictoc::tic()
-odba_data$odba <- tagtools::odba(A = accel_mat, # N by 3 matrix of values
-                                 sampling_rate = 1,
-                                 fh = 1 / 5) # sampling rate in Hz
+odba_data$vedba <- tagtools::odba(A = accel_mat, # N by 3 matrix of values
+                                  sampling_rate = 1, # sampling rate in Hz
+                                  fh = 1 / 5, # filter cut off in Hz
+                                  method = 'vedba',
+                                  n = 1000)
 tictoc::toc()
