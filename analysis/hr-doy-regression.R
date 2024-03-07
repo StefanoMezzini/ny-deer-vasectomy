@@ -73,23 +73,29 @@ filter(d, sex_treatment == 'm rockefeller', hr_est_95 > 7.5) %>%
   select(study_year, animal, Age)
 
 # start by fitting a Hierarchical Generalized Additive Model ----
+# not using cyclic cubic splines because there's too much of a gap (66 days)
+# for year 1 the gap is even bigger
+range(d$days_since_aug_1) # not close to 0 to 365
+365 - (317 - 18)
+
 m_hr <- bam(hr_est_95 ~
-              # temporal sex- and treatment-level trends
-              s(days_since_aug_1, sex_treatment, k = 25, bs = 'fs') +
+              # different baseline HR for each sex and treatment
+              # makes CIs quite wide
+              sex_treatment +
+              # temporal sex- and treatment-level trends with different
+              # levels of smoothness (k = 10 is too low, 20 is too high)
+              s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'ad') +
               # accounts for differences between years
-              s(days_since_aug_1, study_year, k = 5, bs = 'fs') +
-              # random intercept for individual
-              s(days_since_aug_1, animal, k = 15, bs = 'fs'),
+              s(study_year, bs = 're') +
+              # accounts for differences between individuals
+              s(animal, bs = 're'),
             family = Gamma(link = 'log'),
             data = d,
             weights = weight,
             method = 'fREML',
-            discrete = TRUE,
-            control = gam.control(trace = TRUE))
-
+            discrete = TRUE)
+plot(m_hr, pages = 1, scheme = 1, all.terms = TRUE)
 summary(m_hr)
-
-plot(m_hr, pages = 1, trans = exp)
 
 preds <- expand.grid(date = seq(as.Date('2021-09-01'),
                                 as.Date('2022-05-30'),
@@ -111,6 +117,7 @@ preds <- expand.grid(date = seq(as.Date('2021-09-01'),
                        nchar(as.character(sex_treatment)))) %>%
   bind_cols(.,
             predict(object = m_hr, newdata = ., type = 'link',
+                    exclude = c('(Intercept)', 'sex_treatment'),
                     se.fit = TRUE, discrete = FALSE) %>%
               as.data.frame()) %>%
   mutate(mu = exp(fit),
@@ -118,10 +125,11 @@ preds <- expand.grid(date = seq(as.Date('2021-09-01'),
          upr = exp(fit + 1.96 * se.fit))
 
 ggplot(preds, aes(group = sex_treatment)) +
-  facet_grid(study_year ~ .) +
+  facet_grid(study_year ~ sex) +
+  geom_hline(yintercept = 1, lty = 'dashed') +
   geom_vline(xintercept = as.Date('2021-11-09'), col = 'red') +
   geom_ribbon(aes(date, ymin = lwr, ymax = upr,
-                  fill = sex), alpha = 0.2) +
+                  fill = sex), alpha = 0.15) +
   geom_line(aes(date, mu, color = sex, lty = site)) +
   scale_color_brewer('Sex', type = 'qual', palette = 6,
                      aesthetics = c('color', 'fill')) +
@@ -130,18 +138,22 @@ ggplot(preds, aes(group = sex_treatment)) +
   theme(legend.position = 'top')
 
 # location-scale model ----
-m_hr_2 <- gam(list(
+m_hr_2 <- gam(formula = list(
   
   # linear predictor for the mean
   hr_est_95 ~
-    # temporal sex- and treatment-level trends
-    s(days_since_aug_1, sex_treatment, k = 25, bs = 'fs') +
+    # different baseline HR for each sex and treatment makes CIs quite wide
+    sex_treatment +
+    # temporal sex- and treatment-level trends with different
+    # levels of smoothness (k = 10 is too low, 20 is too high)
+    s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'ad') +
     # accounts for differences between years
-    s(days_since_aug_1, study_year, k = 5, bs = 'fs') +
-    # random intercept for individual
+    s(study_year, bs = 're') +
+    # accounts for differences between individuals
     s(animal, bs = 're'),
   
   # linear predictor for the scale (sigma2 = mu^2 * scale)
+  # allows mean-variance relationship to be different between sexes
   ~ sex_treatment), # sex- and treatment-level intercepts
   family = gammals(),
   data = d,
@@ -149,7 +161,7 @@ m_hr_2 <- gam(list(
   method = 'REML',
   control = gam.control(trace = TRUE))
 
-saveRDS(m_hr_2, paste0('models/m_hr_2-', Sys.Date(), '.rds'))
+saveRDS(m_hr_2, paste0('models/m_hr_2-hgamls-', Sys.Date(), '.rds'))
 
 plot(m_hr_2, pages = 1, all.terms = TRUE)
 
@@ -182,8 +194,7 @@ preds_2 <-
 #' **NOTE:** still need to add credible intervals
 # mean HR
 ggplot(preds_2, aes(group = sex_treatment)) +
-  coord_cartesian(ylim = c(0, 5)) +
-  facet_grid(study_year ~ ., ) +
+  facet_grid(study_year ~ sex) +
   geom_vline(xintercept = as.Date('2021-11-09'), col = 'red', alpha = 0.3)+
   geom_line(aes(date, mu, color = sex, lty = site)) +
   scale_color_brewer('Sex', type = 'qual', palette = 6,
