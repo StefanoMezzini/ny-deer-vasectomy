@@ -93,7 +93,7 @@ if(FALSE) {
   
   saveRDS(m_speed, paste0('models/m_speed-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_speed <- readRDS('models/m_speed-hgamls-2024-03-19.rds')
+  m_speed <- readRDS('models/m_speed-hgamls-2024-03-20.rds')
 }
 
 appraise(m_speed, method = 'simulate')
