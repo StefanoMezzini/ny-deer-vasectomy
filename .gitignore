@@ -64,3 +64,7 @@ data/outlier-diagnostics.zip
 example_data_*
 gps_inventa.csv
 /analysis/vickie-code
+
+# cleaned data files are > 100 MB
+data/Year_1_processed_data.csv
+data/Year_2_processed_data.csv
