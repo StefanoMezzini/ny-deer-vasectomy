@@ -26,12 +26,13 @@ CORES <- availableCores(logical = FALSE) - 2
 
 plan(multisession, workers = CORES)
 
-map(d$tel, function(.d) {
-  cat('Running', .d@info$identity, '\n')
-  .d <- window_hr(.d,
-                  window = 14 %#% 'day',
-                  dt = 14 %#% 'day',
-                  fig_path = 'figures/moving-window',
-                  rds_path = 'models/moving-window',
-                  cores = 1) # cannot parallelize on Windows
-})
+future_map(d$tel, function(.d) {
+  .d <- window_ctmm(.d,
+                    window = 14 %#% 'day',
+                    dt = 14 %#% 'day',
+                    fig_path = 'figures/moving-window',
+                    rds_path = 'models/moving-window',
+                    cores = 1) # cannot parallelize on Windows
+},
+.progress = TRUE,
+.options = furrr_options(seed = TRUE))

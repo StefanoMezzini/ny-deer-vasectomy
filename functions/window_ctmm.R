@@ -9,7 +9,7 @@ library('purrr') # for functional programming
 library('ggplot2') # for fancy plots
 theme_set(theme_bw() + theme(legend.position = 'none'))
 
-window_hr <- function(tel, window, dt, projection, full_ud = NULL,
+window_ctmm <- function(tel, window, dt, projection, full_ud = NULL,
                       fig_path = NULL, rds_path = NULL, cores = 1,
                       akde_weights = FALSE, plot_50_q = FALSE) {
   
