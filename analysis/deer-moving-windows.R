@@ -15,24 +15,36 @@ d <- bind_rows(read.csv('data/Year_1_processed_data.csv'),
     .tel <- as.telemetry(.tel)
     uere(.tel) <- deer_uere # add collar error calibration
     return(.tel)
-  }))
+  })) %>%
+  ungroup()
 
 # ensure years 1 and 2 are labelled separately
 unique(d$study.year)
 
+# for a quick test
+if(FALSE) {
+  test <- window_ctmm(d$tel[[1]][c(1:10, 100:110), ],
+                      window = 1 %#% 'day',
+                      dt = 1 %#% 'day',
+                      fig_path = NULL,
+                      rds_path = NULL,
+                      cores = 1, # cannot parallelize on Windows
+                      progress = 1) # can't have progress if parallelized
+}
+
 # set number of cores to run on -- will be parallelizing by collar
 #' **do not set CORES at the number of cores you have available or higher**
 CORES <- availableCores(logical = FALSE) - 2
-
 plan(multisession, workers = CORES)
 
-future_map(d$tel, function(.d) {
-  .d <- window_ctmm(.d,
-                    window = 14 %#% 'day',
-                    dt = 14 %#% 'day',
-                    fig_path = 'figures/moving-window',
-                    rds_path = 'models/moving-window',
-                    cores = 1) # cannot parallelize on Windows
+future_map(d$tel, function(.telemetry) {
+  window_ctmm(.telemetry,
+              window = 14 %#% 'day',
+              dt = 14 %#% 'day',
+              fig_path = 'figures/moving-window',
+              rds_path = 'models/moving-window',
+              cores = 1, # cannot parallelize on Windows
+              progress = 1) # can't have progress if parallelized
 },
 .progress = TRUE,
 .options = furrr_options(seed = TRUE))
