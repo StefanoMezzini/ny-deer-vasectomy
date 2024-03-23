@@ -1,11 +1,12 @@
 library('dplyr')     # for data wrangling
 library('tidyr')     # for data wrangling
+library('purrr')     # for functional programming
 library('mgcv')      # for modeling
 library('lubridate') # for working with dates
 library('ggplot2')    # for fancy plots
 library('gratia')    # for predicting from models
 theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
-source('functions/gammals-variance-simulation-and-derivatives.R')
+source('functions/gammals-variance-simulation-cis.R')
 
 d <- readRDS('data/years-1-and-2-data.rds') %>%
   mutate(animal = factor(animal),
@@ -15,7 +16,7 @@ d <- readRDS('data/years-1-and-2-data.rds') %>%
   # drop first 10 days for each animal to remove odd behaviors
   group_by(animal, study_year) %>%
   filter(date >= min(date) + 10) %>%
-  filter(! is.na(speed_model_est)) # loosing ~42% of the speed estimates
+  filter(! is.na(speed_gauss_est)) # loosing ~40% of the windows
 
 # data is not continuous throughout the year
 hist(yday(d$date))
@@ -29,27 +30,14 @@ d <- mutate(d,
               date - as.Date(paste0(year(date), '-08-01')),
               # otherwise calculate days since Aug 1 of previous year 
               date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-              as.numeric(), # convert difftime to numeric
-            weight = 1 / (speed_model_upr - speed_model_lwr)) %>% # account for speed uncertainty
-  group_by(animal) %>%
-  mutate(weight = weight / mean(weight)) %>% # normalize weights
-  ungroup()
+              as.numeric()) # convert difftime to numeric
 
 hist(d$days_since_aug_1) # now without breaks
-
-# ensure weights are correct
-d %>%
-  group_by(animal) %>%
-  summarize(weights = round(sum(weight)),
-            count = n()) %>%
-  mutate(check = weights == count) %>%
-  pull(check) %>%
-  all()
 
 # plot the data ----
 # plot overall raw data
 p_speed <-
-  ggplot(d, aes(days_since_aug_1, speed_model_est, group = animal)) +
+  ggplot(d, aes(days_since_aug_1, speed_gauss_est, group = animal)) +
   facet_wrap(~ sex_treatment + study_year, ncol = 2) +
   geom_line()
 p_speed
@@ -58,24 +46,26 @@ ggsave('figures/speed-estimates.png', p_speed, width = 8,
        height = 8, dpi = 600, bg = 'white')
 
 # fitting a Hierarchical Generalized Additive Model for Location and Scale ----
-# not using cyclic cubic splines because the gap is too big (66 days)
+# not using cyclic cubic splines because the gap is too big
 # for year 1 the gap is even bigger
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
-# there are some speed outliers
-quantile(d$speed_model_est, c(0.9, 0.95, 0.975, 0.99, 1))
-mean(d$speed_model_est > 10) # percentage of data lost
+# there are some high speed values, but they are well explained by the
+# model. There is an outlier with a speed ~ 8.5 km/day
+quantile(d$speed_gauss_est, c(0.9, 0.95, 0.975, 0.99, 0.995, 1))
+mean(d$speed_gauss_est > 12) # percentage of data lost
+hist(d$speed_gauss_est)
 
 # location-scale model ----
 if(FALSE) {
   m_speed <- gam(formula = list(
     # linear predictor for the mean
-    speed_model_est ~
+    speed_gauss_est ~
       # temporal sex- and treatment-level trends with different
-      s(days_since_aug_1, by = sex_treatment, k = 6) +
+      s(days_since_aug_1, by = sex_treatment, k = 10) +
       # accounts for differences in trends between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 6, bs = 'sz') +
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 10, bs = 'sz') +
       # accounts for differences between individuals
       s(animal, bs = 're'),
     
@@ -86,14 +76,15 @@ if(FALSE) {
     
     family = gammals(),
     data = d,
-    subset = speed_model_est < 10,
-    weights = weight,
     method = 'REML',
-    control = gam.control(trace = TRUE))
+    control = gam.control(trace = FALSE))
+  
+  appraise(m_speed, method = 'simulate')
+  plot(m_speed, pages = 1)
   
   saveRDS(m_speed, paste0('models/m_speed-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_speed <- readRDS('models/m_speed-hgamls-2024-03-20.rds')
+  m_speed <- readRDS('models/m_speed-hgamls-2024-03-23.rds')
 }
 
 appraise(m_speed, method = 'simulate')
@@ -159,7 +150,7 @@ DATES <- as.Date(c('2021-09-15', '2021-11-15', '2022-01-15', '2022-03-15',
                    '2022-05-15'))
 LABS <- format(DATES, '%B 15')
 p_mu <-
-  ggplot(preds_mu, aes(group = sex_treatment)) +
+  ggplot(preds_mu) +
   facet_grid(sex ~ .) +
   geom_vline(xintercept = as.Date('2021-11-09'), col = 'red')+
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
@@ -169,7 +160,7 @@ p_mu <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab('Mean 7-day movement (km/day)') +
+  ylab('Mean distance travelled (km/day)') +
   theme(legend.position = 'top'); p_mu
 
 ggsave('figures/speed-mean.png', p_mu, width = 8, height = 8, dpi = 600,
@@ -187,7 +178,7 @@ p_s <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab('Mean 7-day movement (km/day)') +
+  ylab('SD in distance travelled (km/day)') +
   theme(legend.position = 'top'); p_s
 
 ggsave('figures/speed-sd.png', p_s, width = 8, height = 8, dpi = 600,
@@ -252,7 +243,7 @@ p_mu_y <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab('Mean 7-day movement (km/day)') +
+  ylab('Mean distance travelled (km/day)') +
   theme(legend.position = 'top'); p_mu_y
 
 ggsave('figures/speed-mean-years.png',
@@ -270,7 +261,7 @@ p_s <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('SD in 7-day space-use requirements'~(km^2)))) +
+  ylab('SD in distance travelled (km/day)') +
   theme(legend.position = 'top'); p_s
 
 ggsave('figures/speed-sd-years.png', p_s, width = 8, height = 8, dpi = 600,
