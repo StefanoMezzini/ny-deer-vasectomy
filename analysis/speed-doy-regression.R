@@ -37,8 +37,14 @@ hist(d$days_since_aug_1) # now without breaks
 # plot the data ----
 # plot overall raw data
 p_speed <-
-  ggplot(d, aes(days_since_aug_1, speed_gauss_est, group = animal)) +
-  facet_wrap(~ sex_treatment + study_year, ncol = 2) +
+  mutate(d,
+         sex = if_else(sex == 'f', 'females', 'males'),
+         treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
+                             'Staten Island'),
+         t_s = paste(treatment, sex),
+         study_year = paste('Year', study_year)) %>%
+  ggplot(aes(days_since_aug_1, speed_gauss_est, group = animal)) +
+  facet_grid(t_s ~ study_year) +
   geom_line()
 p_speed
 
