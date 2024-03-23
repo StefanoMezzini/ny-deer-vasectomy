@@ -43,8 +43,10 @@ p_speed <-
                              'Staten Island'),
          t_s = paste(treatment, sex),
          study_year = paste('Year', study_year)) %>%
-  ggplot(aes(days_since_aug_1, speed_gauss_est, group = animal)) +
-  facet_grid(t_s ~ study_year) +
+  ggplot(aes(date, speed_gauss_est, group = animal)) +
+  facet_grid(t_s ~ study_year, scales = 'free_x') +
+  geom_vline(xintercept = as.Date(paste0('202', 1:2, '-11-09')),
+             col = 'red') +
   geom_line()
 p_speed
 
@@ -95,6 +97,7 @@ if(FALSE) {
 
 appraise(m_speed, method = 'simulate')
 plot(m_speed, pages = 1)
+summary(m_speed)
 
 # plot the estimated trends common between the two years ----
 newd <-
