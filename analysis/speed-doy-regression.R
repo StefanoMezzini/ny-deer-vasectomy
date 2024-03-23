@@ -7,6 +7,7 @@ library('ggplot2')    # for fancy plots
 library('gratia')    # for predicting from models
 theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
 source('functions/gammals-variance-simulation-cis.R')
+source('analysis/ref_dates.R')
 
 d <- readRDS('data/years-1-and-2-data.rds') %>%
   mutate(animal = factor(animal),
@@ -45,8 +46,7 @@ p_speed <-
          study_year = paste('Year', study_year)) %>%
   ggplot(aes(date, speed_gauss_est, group = animal)) +
   facet_grid(t_s ~ study_year, scales = 'free_x') +
-  geom_vline(xintercept = as.Date(paste0('202', 1:2, '-11-09')),
-             col = 'red') +
+  geom_vline(xintercept = REF_DATES, col = 'red') +
   geom_line()
 p_speed
 
@@ -161,7 +161,7 @@ LABS <- format(DATES, '%B 15')
 p_mu <-
   ggplot(preds_mu) +
   facet_grid(sex ~ .) +
-  geom_vline(xintercept = as.Date('2021-11-09'), col = 'red')+
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
               alpha = 0.3) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
@@ -179,7 +179,7 @@ ggsave('figures/speed-mean.png', p_mu, width = 8, height = 8, dpi = 600,
 p_s <-
   ggplot(preds_s) +
   facet_grid(sex ~ .) +
-  geom_vline(xintercept = as.Date('2021-11-09'), col = 'red')+
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
                   fill = site), alpha = 0.3) +
   geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
@@ -244,7 +244,7 @@ preds_s_years <-
 p_mu_y <-
   ggplot(preds_mu_years) +
   facet_grid(sex ~ paste('Year', study_year)) +
-  geom_vline(xintercept = as.Date('2021-11-09'), col = 'red') +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
               alpha = 0.3) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
@@ -256,13 +256,13 @@ p_mu_y <-
   theme(legend.position = 'top'); p_mu_y
 
 ggsave('figures/speed-mean-years.png',
-       p_mu_y, width = 8, height = 8, dpi = 600, bg = 'white')
+       p_mu_y, width = 16, height = 8, dpi = 600, bg = 'white')
 
 # variance in speed ---
 p_s <-
   ggplot(preds_s_years, aes(group = sex_treatment)) +
   facet_grid(sex ~ paste('Year', study_year)) +
-  geom_vline(xintercept = as.Date('2021-11-09'), col = 'red')+
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
                   fill = site), alpha = 0.3) +
   geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
@@ -273,5 +273,5 @@ p_s <-
   ylab('SD in distance travelled (km/day)') +
   theme(legend.position = 'top'); p_s
 
-ggsave('figures/speed-sd-years.png', p_s, width = 8, height = 8, dpi = 600,
+ggsave('figures/speed-sd-years.png', p_s, width = 16, height = 8, dpi = 600,
        bg = 'white')
