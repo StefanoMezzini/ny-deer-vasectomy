@@ -312,7 +312,7 @@ p_mu_y <-
   theme(legend.position = 'top'); p_mu_y
 
 ggsave('figures/hr-mean-years.png',
-       p_mu_y, width = 8, height = 8, dpi = 600, bg = 'white')
+       p_mu_y, width = 16, height = 8, dpi = 600, bg = 'white')
 
 # variance in HR ---
 p_s <-
@@ -329,6 +329,5 @@ p_s <-
   ylab(expression(bold('SD in 7-day space-use requirements'~(km^2)))) +
   theme(legend.position = 'top'); p_s
 
-ggsave('figures/hr-sd-years.png', p_s, width = 8, height = 8, dpi = 600,
+ggsave('figures/hr-sd-years.png', p_s, width = 16, height = 8, dpi = 600,
        bg = 'white')
-  
