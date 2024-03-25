@@ -1,17 +1,23 @@
 library('dplyr')     # for data wrangling
+library('tidyr')     # for data wrangling
 library('mgcv')      # for modeling
 library('lubridate') # for working with dates
 library('ggplot2')    # for fancy plots
 library('gratia')    # for predicting from models
-theme_set(theme_bw())
+theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
+source('functions/gammals-variance-simulation-cis.R')
+source('analysis/ref_dates.R')
 
 d <- readRDS('data/years-1-and-2-data.rds') %>%
-  mutate(animal_year = factor(paste(animal, study_year)),
+  mutate(animal = factor(animal),
          study_year = factor(study_year),
          sex_treatment = factor(paste(sex, study_site)),
-         s_t_y = factor(paste(sex, study_site, study_year)))
-
-plot(hr_est_95 ~ diffusion_est, d)
+         s_t_y = factor(paste(sex, study_site, study_year))) %>%
+  # drop first 10 days for each animal to remove odd behaviors
+  group_by(animal, study_year) %>%
+  filter(date >= min(date) + 10) %>%
+  ungroup() %>%
+  filter(! is.na(diffusion_est)) # 67 NA values
 
 # data is not continuous throughout the year
 hist(yday(d$date))
@@ -25,138 +31,196 @@ d <- mutate(d,
               date - as.Date(paste0(year(date), '-08-01')),
               # otherwise calculate days since Aug 1 of previous year 
               date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-              as.numeric(), # convert difftime to numeric
-            weight = 1 / (diffusion_upr - diffusion_lwr)) %>% # account for HR uncertainty
-  group_by(animal) %>%
-  mutate(weight = weight / mean(weight)) %>% # normalize weights
-  ungroup()
+              as.numeric()) # convert difftime to numeric
 
 hist(d$days_since_aug_1) # now without breaks
 
-# ensure weights are correct
-d %>%
-  group_by(animal) %>%
-  summarize(weights = round(sum(weight)),
-            count = n()) %>%
-  mutate(check = weights == count) %>%
-  pull(check) %>%
-  all()
-
 # plot the data ----
 # plot overall raw data
-ggplot(d, aes(days_since_aug_1, diffusion_est, group = animal)) +
-  facet_wrap(~ sex_treatment) +
-  coord_cartesian(ylim = c(0, 15)) +
-  geom_line()
+p_diffusion <-
+  mutate(d,
+         sex = if_else(sex == 'f', 'females', 'males'),
+         treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
+                             'Staten Island'),
+         t_s = paste(treatment, sex),
+         study_year = paste('Year', study_year)) %>%
+  ggplot(aes(date, diffusion_est, group = animal)) +
+  facet_grid(t_s ~ study_year, scales = 'free') +
+  geom_vline(xintercept = REF_DATES, col = 'red') +
+  geom_line() +
+  labs(x = NULL, y = expression(bold('Estimated diffusion'~(km^2/day))))
+p_diffusion
 
-# using free scales to view cycles more clearly
-ggplot(d, aes(days_since_aug_1, diffusion_est)) +
-  facet_wrap(~ sex_treatment, scales = 'free_y') +
-  geom_vline(xintercept = 100, col = 'red') +
-  geom_line(aes(group = animal)) +
-  geom_smooth()
-
-# scaling by max home range
-d %>%
-  group_by(animal) %>%
-  mutate(diffusion_rel = diffusion_est / max(diffusion_est)) %>%
-  ungroup() %>%
-  ggplot(aes(days_since_aug_1, diffusion_rel, group = animal)) +
-  facet_wrap(~ sex_treatment, scales = 'free_y') +
-  geom_vline(xintercept = 100, col = 'red') +
-  geom_line()
-
-# find odd male from S Island
-filter(d, sex_treatment == 'm staten_island', diffusion_est > 15) %>%
-  select(study_year, animal, Age)
-
-# find males with large HRs on Rockefeller
-filter(d, sex_treatment == 'm rockefeller', diffusion_est > 7.5) %>%
-  select(study_year, animal, Age)
+ggsave('figures/diffusion-estimates.png', p_diffusion, width = 8,
+       height = 8, dpi = 600, bg = 'white')
 
 # start by fitting a Hierarchical Generalized Additive Model ----
-m_diff <- bam(diffusion_est ~
-              # temporal sex- and treatment-level trends
-              s(days_since_aug_1, sex_treatment, k = 15, bs = 'fs') +
-              # accounts for differences between years
-              s(days_since_aug_1, study_year, k = 5, bs = 'fs') +
-              # random intercept for individual
-              s(days_since_aug_1, animal_year, k = 15, bs = 'fs'),
-            family = Gamma(link = 'log'),
-            data = d,
-            weights = weight,
-            method = 'fREML',
-            discrete = TRUE,
-            control = gam.control(trace = TRUE))
-saveRDS(m_diff, paste0('models/m_diffusion_1-', Sys.Date(), '.rds'))
-
-summary(m_hr)
-
-plot(m_hr, pages = 1, trans = exp, scale = 0)
-
-preds <- expand.grid(date = seq(as.Date('2021-09-01'),
-                                as.Date('2022-05-30'),
-                                length.out = 400),
-                     sex_treatment = unique(d$sex_treatment),
-                     study_year = 1:2,
-                     animal = 'new animal') %>%
-  mutate(s_t_y = paste(sex_treatment, study_year),
-         days_since_aug_1 = if_else(
-           # if in Aug, Sept, Oct, Nov, or Dec
-           month(date) >= 8,
-           # then calculate days since Aug 1
-           date - as.Date(paste0(year(date), '-08-01')),
-           # otherwise calculate days since Aug 1 of previous year 
-           date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-           as.numeric(),
-         sex = substr(sex_treatment, 1, 1),
-         site = substr(sex_treatment, 3,
-                       nchar(as.character(sex_treatment)))) %>%
-  bind_cols(.,
-            predict(object = m_hr, newdata = ., type = 'link',
-                    se.fit = TRUE, discrete = FALSE) %>%
-              as.data.frame()) %>%
-  mutate(mu = exp(fit),
-         lwr = exp(fit - 1.96 * se.fit),
-         upr = exp(fit + 1.96 * se.fit))
-
-ggplot(preds, aes(group = sex_treatment)) +
-  facet_grid(study_year ~ .) +
-  geom_vline(xintercept = as.Date('2021-11-09'), col = 'red') +
-  geom_ribbon(aes(date, ymin = lwr, ymax = upr,
-                  fill = sex), alpha = 0.2) +
-  geom_line(aes(date, mu, color = sex, lty = site)) +
-  scale_color_brewer('Sex', type = 'qual', palette = 6,
-                     aesthetics = c('color', 'fill')) +
-  scale_linetype('Site name') +
-  labs(x = NULL, y = expression('7-day home range size'~(km^2))) +
-  theme(legend.position = 'top')
+# not using cyclic cubic splines because the gap is too big
+# for year 1 the gap is even bigger
+range(d$days_since_aug_1) # not close to 0 to 365
+365 - diff(range(d$days_since_aug_1))
 
 # location-scale model ----
-m_diffusion_2 <- gam(list(
+# too many high values (2-8) but predicted to be < 1
+# need to use 14-day moving window instead
+if(FALSE) {
+  sum(d$diffusion_est > 4)
   
-  # linear predictor for the mean
-  diffusion_est ~
-    # temporal sex- and treatment-level trends
-    s(days_since_aug_1, sex_treatment, k = 25, bs = 'fs') +
-    # accounts for differences between years
-    s(days_since_aug_1, study_year, k = 5, bs = 'fs') +
-    # random intercept for individual
-    s(animal, bs = 're'),
+  m_diffusion <- gam(formula = list(
+    # linear predictor for the mean
+    diffusion_est ~
+      # temporal sex- and treatment-level trends with different
+      s(days_since_aug_1, by = sex_treatment, k = 10) +
+      # accounts for differences in trends between years
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 6, bs = 'sz') +
+      # accounts for differences between individuals
+      s(animal, bs = 're'),
+    
+    # linear predictor for the scale (sigma2 = mu^2 * scale)
+    # allows mean-variance relationship to be different between sexes
+    # sex- and treatment-level trends over season
+    ~ s(days_since_aug_1, sex_treatment, k = 5, bs = 'fs')),
+    
+    family = gammals(),
+    data = d,
+    method = 'REML',
+    control = gam.control(trace = TRUE))
   
-  # linear predictor for the scale (sigma2 = mu^2 * scale)
-  ~ sex_treatment), # sex- and treatment-level intercepts
-  family = gammals(),
-  data = d,
-  weights = weight,
-  method = 'REML',
-  control = gam.control(trace = TRUE))
+  appraise(m_diffusion)
+  saveRDS(m_diffusion, paste0('models/m_diffusion-hgamls-', Sys.Date(), '.rds'))
+} else {
+  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-03-25.rds')
+}
 
-saveRDS(m_diffusion_2, paste0('models/m_diffusion_2-', Sys.Date(), '.rds'))
+plot(m_diffusion, pages = 1)
 
-plot(m_diffusion_2, pages = 1, all.terms = TRUE)
+ggplot() +
+  geom_point(aes(m_diffusion$fitted.values[, 1], m_diffusion$model$diffusion),
+             alpha = 0.2) +
+  geom_abline(intercept = 0, slope = 1, color = 'red')
 
-preds_2 <-
+# check what groups cause oddly large outliers
+mutate(d,
+       sex = if_else(sex == 'f', 'Females', 'Males'),
+       treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
+                           'Staten Island'),
+       fitted = m_diffusion$fitted.values[, 1],
+       large = resid(m_diffusion) > 3) %>%
+  ggplot() +
+  facet_grid(treatment ~ sex) +
+  geom_point(aes(fitted, diffusion_est, color = large, alpha = large)) +
+  labs(x = 'Fitted values', y = 'Observed values') +
+  scale_color_manual('Deviance residuals > 3', values = 1:2) +
+  scale_alpha_manual('Deviance residuals > 3', values = c(0.3, 1)) +
+  theme(legend.position = 'top')
+
+ggsave('figures/diffusion-model-obs-fitted.png', width = 8, height = 8,
+       dpi = 600, bg = 'white')
+
+# check periods of oddly large outliers
+d %>%
+  filter(resid(m_diffusion) > 3) %>%
+  ggplot() +
+  facet_grid(study_site ~ sex) +
+  geom_histogram(aes(days_since_aug_1), color = 'black', fill = 'grey',
+                 bins = 6)
+
+# plot the estimated trends common between the two years ----
+newd <-
+  expand.grid(date = seq(as.Date('2021-09-01'),
+                         as.Date('2022-05-30'),
+                         length.out = 400),
+              sex_treatment = unique(d$sex_treatment),
+              study_year = 'new year',
+              animal = 'new animal',
+              s_t_y = 'new s_t_y') %>%
+  mutate(days_since_aug_1 = if_else(
+    # if in Aug, Sept, Oct, Nov, or Dec
+    month(date) >= 8,
+    # then calculate days since Aug 1
+    date - as.Date(paste0(year(date), '-08-01')),
+    # otherwise calculate days since Aug 1 of previous year 
+    date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
+      as.numeric(),
+    sex = substr(sex_treatment, 1, 1),
+    site = substr(sex_treatment, 3,
+                  nchar(as.character(sex_treatment))))
+
+preds_mu <- gammals_mean(model = m_diffusion, data = newd, nsims = 1e4,
+                         unconditional = FALSE,
+                         # not excluding the term results in NA
+                         exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
+                                     's(days_since_aug_1,study_year):sex_treatmentf staten_island',
+                                     's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
+                                     's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
+  group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
+  summarize(lwr_95 = quantile(mean, 0.025),
+            mu = quantile(mean, 0.500),
+            upr_95 = quantile(mean, 0.975),
+            .groups = 'drop') %>%
+  mutate(sex = case_when(sex == 'f' ~ 'Female',
+                         sex == 'm' ~ 'Male'),
+         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                          site == 'staten_island' ~ 'Staten Island'))
+
+preds_s <- gammals_var(model = m_diffusion, data = newd, nsims = 1e4,
+                       unconditional = FALSE,
+                       # not excluding the term results in NA
+                       exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
+                                   's(days_since_aug_1,study_year):sex_treatmentf staten_island',
+                                   's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
+                                   's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
+  group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
+  summarize(lwr_95 = quantile(variance, 0.025),
+            s2 = quantile(variance, 0.500),
+            upr_95 = quantile(variance, 0.975),
+            .groups = 'drop') %>%
+  mutate(sex = case_when(sex == 'f' ~ 'Female',
+                         sex == 'm' ~ 'Male'),
+         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                          site == 'staten_island' ~ 'Staten Island'))
+
+# mean diffusion
+DATES <- as.Date(c('2021-09-15', '2021-11-15', '2022-01-15', '2022-03-15',
+                   '2022-05-15'))
+LABS <- format(DATES, '%B 15')
+p_mu <-
+  ggplot(preds_mu, aes(group = sex_treatment)) +
+  facet_grid(sex ~ .) +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
+  geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
+              alpha = 0.3) +
+  geom_line(aes(date, mu, color = site), lwd = 1) +
+  scale_color_brewer('Site', type = 'qual', palette = 1,
+                     aesthetics = c('color', 'fill')) +
+  scale_linetype('Site') +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  ylab(expression(bold('Mean diffusion'~(km^2/day)))) +
+  theme(legend.position = 'top'); p_mu
+
+ggsave('figures/diffusion-mean.png', p_mu, width = 8, height = 8, dpi = 600,
+       bg = 'white')
+
+# standard deviation in diffusion ---
+p_s <-
+  ggplot(preds_s) +
+  facet_grid(sex ~ .) +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
+  geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
+                  fill = site), alpha = 0.3) +
+  geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
+  scale_color_brewer('Site', type = 'qual', palette = 1,
+                     aesthetics = c('color', 'fill')) +
+  scale_linetype('Site') +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  ylab(expression(bold('SD in diffusion'~(km^2/day)))) +
+  theme(legend.position = 'top'); p_s
+
+ggsave('figures/diffusion-sd.png', p_s, width = 8, height = 8, dpi = 600,
+       bg = 'white')
+
+# plot the estimated trends for each year ----
+newd_years <-
   expand.grid(date = seq(as.Date('2021-09-01'),
                          as.Date('2022-05-30'),
                          length.out = 400),
@@ -174,35 +238,66 @@ preds_2 <-
            as.numeric(),
          sex = substr(sex_treatment, 1, 1),
          site = substr(sex_treatment, 3,
-                       nchar(as.character(sex_treatment)))) %>%
-  bind_cols(.,
-            predict(object = m_diffusion_2, newdata = ., type = 'response',
-                    se.fit = TRUE) %>%
-              as.data.frame()) %>%
-  mutate(mu = fit.1,
-         sigma2 = fit.1^2 * exp(fit.2))
+                       nchar(as.character(sex_treatment))))
 
-#' **NOTE:** still need to add credible intervals
-# mean HR
-ggplot(preds_2, aes(group = sex_treatment)) +
-  coord_cartesian(ylim = c(0, 5)) +
-  facet_grid(study_year ~ ., ) +
-  geom_vline(xintercept = as.Date('2021-11-09'), col = 'red', alpha = 0.3)+
-  geom_line(aes(date, mu, color = sex, lty = site)) +
-  scale_color_brewer('Sex', type = 'qual', palette = 6,
+preds_mu_years <-
+  gammals_mean(model = m_diffusion, data = newd_years, nsims = 1e4,
+               unconditional = FALSE) %>%
+  group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
+  summarize(lwr_95 = quantile(mean, 0.025),
+            mu = quantile(mean, 0.500),
+            upr_95 = quantile(mean, 0.975),
+            .groups = 'drop') %>%
+  mutate(sex = case_when(sex == 'f' ~ 'Female',
+                         sex == 'm' ~ 'Male'),
+         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                          site == 'staten_island' ~ 'Staten Island'))
+
+preds_s_years <-
+  gammals_var(model = m_diffusion, data = newd_years, nsims = 1e4,
+              unconditional = FALSE) %>%
+  group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
+  summarize(lwr_95 = quantile(variance, 0.025),
+            s2 = quantile(variance, 0.500),
+            upr_95 = quantile(variance, 0.975),
+            .groups = 'drop') %>%
+  mutate(sex = case_when(sex == 'f' ~ 'Female',
+                         sex == 'm' ~ 'Male'),
+         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                          site == 'staten_island' ~ 'Staten Island'))
+
+# mean diffusion
+p_mu_y <-
+  ggplot(preds_mu_years) +
+  facet_grid(sex ~ paste('Year', study_year)) +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
+  geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
+              alpha = 0.3) +
+  geom_line(aes(date, mu, color = site), lwd = 1) +
+  scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
-  labs(x = NULL, y = expression('Mean 7-day home range size'~(km^2))) +
-  theme(legend.position = 'top')
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  ylab(expression(bold('Mean diffusion'~(km^2/day)))) +
+  theme(legend.position = 'top'); p_mu_y
 
-# SD in HR
-ggplot(preds_2, aes(group = sex_treatment)) +
-  coord_cartesian(ylim = c(0, 5)) +
-  facet_grid(study_year ~ .) +
-  geom_vline(xintercept = as.Date('2021-11-09'), col = 'red', alpha = 0.3)+
-  geom_line(aes(date, sqrt(sigma2), color = sex, lty = site)) +
-  scale_color_brewer('Sex', type = 'qual', palette = 6,
+ggsave('figures/diffusion-mean-years.png',
+       p_mu_y, width = 16, height = 8, dpi = 600, bg = 'white')
+
+# variance in diffusion ---
+p_s <-
+  ggplot(preds_s_years, aes(group = sex_treatment)) +
+  facet_grid(sex ~ paste('Year', study_year)) +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
+  geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
+                  fill = site), alpha = 0.3) +
+  geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
+  scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
-  labs(x = NULL, y = expression('SD in 7-day home range size'~(km^2))) +
-  theme(legend.position = 'top')
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  ylab(expression(bold('SD in diffusion'~(km^2/day)))) +
+  theme(legend.position = 'top'); p_s
+
+ggsave('figures/diffusion-sd-years.png', p_s, width = 16, height = 8,
+       dpi = 600, bg = 'white')
