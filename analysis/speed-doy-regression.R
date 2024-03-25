@@ -99,6 +99,25 @@ appraise(m_speed, method = 'simulate')
 plot(m_speed, pages = 1)
 summary(m_speed)
 
+# check what groups cause oddly large outliers
+d %>%
+  ungroup() %>%
+  mutate(sex = if_else(sex == 'f', 'Females', 'Males'),
+       treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
+                           'Staten Island'),
+       fitted = m_speed$fitted.values[, 1],
+       large = resid(m_speed) > 3) %>%
+  ggplot() +
+  facet_grid(treatment ~ sex) +
+  geom_point(aes(fitted, speed_gauss_est, color = large, alpha = large)) +
+  labs(x = 'Fitted values', y = 'Observed values') +
+  scale_color_manual('Deviance residuals > 3', values = 1:2) +
+  scale_alpha_manual('Deviance residuals > 3', values = c(0.3, 1)) +
+  theme(legend.position = 'top')
+
+ggsave('figures/speed-model-obs-fitted.png', width = 8, height = 8,
+       dpi = 600, bg = 'white')
+
 # plot the estimated trends common between the two years ----
 newd <-
   expand.grid(date = seq(as.Date('2021-09-01'),
