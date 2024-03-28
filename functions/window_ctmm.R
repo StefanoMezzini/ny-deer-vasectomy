@@ -39,6 +39,7 @@ window_ctmm <- function(.tel, window, dt, projection, full_ud = NULL,
   
   out <-
     tibble(
+      animal = .tel@info$identity, # animal ID
       # add start and end times
       t_start = times, # left bound
       t_end = t_start + window, # right bound
@@ -60,67 +61,23 @@ window_ctmm <- function(.tel, window, dt, projection, full_ud = NULL,
                 list(),
               # select best movement model based on subset of .tel
               model = ctmm.select(data = .d, CTMM = guess[[1]],
-                                  cores = cores, trace = progress) %>%
+                                  cores = cores, trace = progress - 1) %>%
                 list(),
               # estimate autocorrelated kernel density estimate
               akde = akde(data = .d, CTMM = model[[1]],
-                          weights = akde_weights, trace = progress) %>%
+                          weights = akde_weights, trace = progress - 1) %>%
                 list(),
               # find home range estimate
               hr_est_95 = extract_hr(a = akde[[1]], par='est', l.ud=0.95),
               hr_lwr_95 = extract_hr(a = akde[[1]], par='low', l.ud=0.95),
-              hr_upr_95 = extract_hr(a = akde[[1]], par='high', l.ud=0.95),
-              # find diffusion estimates
-              diffusion = map_dbl(model, \(.m) {
-                if(any(grepl('diffusion',
-                             rownames(summary(.m)$CI)))) {
-                  return(summary(.m, units = FALSE)$
-                           CI['diffusion (square meters/second)', 'est'])
-                } else {
-                  return(NA_real_)
-                }}),
-              # find speed
-              speed = map_dbl(model, \(.m) {
-                if(any(grepl('speed',
-                             rownames(summary(.m)$CI)))) {
-                  return(summary(.m, units = FALSE)$
-                           CI['speed (meters/second)', 'est'])
-                } else {
-                  return(NA_real_)
-                }}),
-              # find degrees of freedom
-              dof_area = summary(model[[1]])$DOF['area'],
-              dof_diff = if_else(
-                condition = grepl('OU', summary(model[[1]])$name),
-                true = summary(model[[1]])$DOF['speed'],
-                false = NA_real_),
-              dof_speed = if_else(
-                condition = grepl('OUF', toupper(summary(model[[1]])$name)),
-                true = summary(model[[1]])$DOF['speed'],
-                false = NA_real_))
+              hr_upr_95 = extract_hr(a = akde[[1]], par='high', l.ud=0.95))
           } else {
-            tibble(
-              guess = list('Insufficient data.'),
-              model = list('Insufficient data.'),
-              akde = list('Insufficient data.'),
-              hr_est_95 = NA_real_,
-              hr_lwr_95 = NA_real_,
-              hr_upr_95 = NA_real_,
-              diffusion = NA_real_,
-              speed = NA_real_,
-              dof_area = NA_real_,
-              dof_diff = NA_real_,
-              dof_speed = NA_real_)
+            tibble(guess = list('Insufficient data.')) # rest will be NA
           } # close else
         })) %>% # close function for imap()
     tidyr::unnest(models) %>%
     #' `ctmm::%#%` syntax: `"new units" %#% value in SI units`
-    mutate(units_area = 'km^2', # already converted
-           units_diff = 'km^2/day',
-           diffusion = units_diff %#% diffusion,
-           units_speed = 'km/day',
-           speed = units_speed %#% speed,
-           t_center = (t_start + t_end) / 2,
+    mutate(t_center = (t_start + t_end) / 2,
            posixct = as.POSIXct(t_center, origin = '1970-01-01',
                                 tz = .tel@info$timezone),
            date = as.Date(posixct))
@@ -189,7 +146,7 @@ if(FALSE) {
                       window = 1 %#% 'day', # size of the moving window
                       dt = 1 %#% 'day', # step size for the moving window
                       fig_path = NULL, # can specify where to save the figure
-                      progress = 1) # can get finer details with > 1
+                      progress = 2) # can get finer details with > 1
   
-  rm(buffalo)
+  rm(buffalo, test)
 }
