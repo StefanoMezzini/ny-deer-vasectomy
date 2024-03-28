@@ -37,14 +37,15 @@ if(FALSE) {
 CORES <- availableCores(logical = FALSE) - 2
 plan(multisession, workers = CORES)
 
-future_map(d$tel, function(.telemetry) {
-  window_ctmm(.telemetry,
+future_map2(d$tel, d$study.year, function(.telemetry, .sy) {
+  window_ctmm(.tel = .telemetry,
+              study_year = .sy,
               window = 14 %#% 'day',
               dt = 14 %#% 'day',
               fig_path = 'figures/moving-window',
               rds_path = 'models/moving-window',
               cores = 1, # cannot parallelize on Windows
-              progress = 1) # can't have progress if parallelized
+              progress = 0) # can't have progress if parallelized
 },
 .progress = TRUE,
 .options = furrr_options(seed = TRUE))
