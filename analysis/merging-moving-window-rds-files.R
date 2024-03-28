@@ -44,7 +44,7 @@ d <-
          diff_lwr = map_dbl(model, \(.m) ctmm:::diffusion(.m)[1]),
          diff_est = map_dbl(model, \(.m) ctmm:::diffusion(.m)[2]),
          diff_upr = map_dbl(model, \(.m) ctmm:::diffusion(.m)[3]),
-         speed_obj = map(model, \(.m) speed(.m, level = 0) %>%
+         speed_obj = map(model, \(.m) speed(.m, units = FALSE) %>%
                            suppressWarnings()), # for non-OUF models
          speed_est = map_dbl(speed_obj, \(.s) .s$CI[, 'est']),
          #' change missing speeds from `Inf` to `NA`
@@ -97,7 +97,7 @@ hist(yday(d$date)) # data is not continuous throughout the year
 hist(d$days_since_aug_1) # now continuous
 
 # save the final dataset ----
-saveRDS(object = d, file = 'data/years-1-and-2-data.rds')
+saveRDS(object = d, file = 'data/years-1-and-2-data-akde.rds')
 
 # version without models to push to GitHub
 d %>%
