@@ -68,3 +68,6 @@ gps_inventa.csv
 # cleaned data files are > 100 MB
 data/Year_1_processed_data.csv
 data/Year_2_processed_data.csv
+
+# merged moving window data with AKDEs
+data/years-1-and-2-data.rds
