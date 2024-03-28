@@ -79,17 +79,21 @@ range(d$days_since_aug_1) # not close to 0 to 365
 # some very high HRs
 quantile(d$hr_est_95, c(0.95, 0.97, 0.98, 0.99, 1))
 # dropping HRs > 7.5 barely drops < 2% of the data
-round(1 - ecdf(d$hr_est_95)(7.5), 3)
+round(mean(d$hr_est_95 > 7.5), 3)
 
 # location-scale model ----
 if(FALSE) {
   m_hr <- gam(formula = list(
     # linear predictor for the mean
     hr_est_95 ~
-      # temporal sex- and treatment-level trends with different
-      s(days_since_aug_1, by = sex_treatment, k = 10) +
-      # accounts for differences in trends between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 10, bs = 'sz') +
+      # temporal sex- and treatment-level trends with different smoothness
+      #' using different smoothness for each `sex_treatment` and high `k`
+      #' because females have cyclical estrous periods, while males do not
+      s(days_since_aug_1, by = sex_treatment, k = 30, bs = 'ad') +
+      # accounts for deviation from average between years
+      #' keeping `by = sex_treatment` and high `k` to account for full
+      #' differences between years
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 30, bs = 'sz') +
       # accounts for differences between individuals
       s(animal, bs = 're'),
     
@@ -100,8 +104,7 @@ if(FALSE) {
     
     family = gammals(),
     data = d,
-    subset = hr_est_95 < 7.5, #' **drop extreme HR estimates**
-    weights = dof_area,
+    subset = hr_est_95 < 7.5, # dropping extreme HR estimates
     method = 'REML',
     control = gam.control(trace = TRUE))
   
@@ -110,10 +113,11 @@ if(FALSE) {
   
   saveRDS(m_hr, paste0('models/m_hr-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_hr <- readRDS('models/m_hr-hgamls-2024-03-23.rds')
+  m_hr <- readRDS('models/m_hr-hgamls-2024-03-27.rds')
 }
 
-plot(m_hr, pages = 1)
+plot(m_hr, pages = 1, scheme = c(rep(1, 4), rep(0, 6)))
+summary(m_hr)
 
 ggplot() +
   geom_point(aes(m_hr$fitted.values[, 1], m_hr$model$hr_est_95),
