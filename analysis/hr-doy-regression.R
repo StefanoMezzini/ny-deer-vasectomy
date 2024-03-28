@@ -9,41 +9,11 @@ theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 
-d <- readRDS('data/years-1-and-2-data.rds') %>%
-  mutate(animal = factor(animal),
-         study_year = factor(study_year),
-         sex_treatment = factor(paste(sex, study_site)),
-         s_t_y = factor(paste(sex, study_site, study_year))) %>%
-  # drop first 10 days for each animal to remove odd behaviors
-  group_by(animal, study_year) %>%
-  filter(date >= min(date) + 10) %>%
-  ungroup() %>%
-  mutate(dof_area = map_dbl(model, \(.m) summary(.m)$DOF['area']))
+d <- readRDS('data/years-1-and-2-data.rds')
+mean(map_dbl(d$model, ctmm:::DOF.area) < 2)
+quantile(map_dbl(d$model, ctmm:::DOF.area), probs = c(0, 0.01, 0.02, 0.05))
 
-quantile(d$dof_area, probs = c(0, 0.1, 0.2, 0.25))
-
-# data is not continuous throughout the year
-hist(yday(d$date))
-
-# create a column of days since August 1st
-d <- mutate(d,
-            days_since_aug_1 = if_else(
-              # if in Aug, Sept, Oct, Nov, or Dec
-              month(date) >= 8,
-              # then calculate days since Aug 1
-              date - as.Date(paste0(year(date), '-08-01')),
-              # otherwise calculate days since Aug 1 of previous year 
-              date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-              as.numeric()) # convert difftime to numeric
-
-# plot the data ----
-# plot overall raw data
-ggplot(d, aes(days_since_aug_1, hr_est_95, group = animal)) +
-  facet_wrap(~ sex_treatment + study_year, ncol = 2) +
-  # coord_cartesian(ylim = c(0, 15)) +
-  geom_line()
-
-# using free scales to view cycles more clearly
+# plot the raw data ----
 p_hr <-
   mutate(d,
          sex = if_else(sex == 'f', 'females', 'males'),
@@ -78,8 +48,9 @@ range(d$days_since_aug_1) # not close to 0 to 365
 
 # some very high HRs
 quantile(d$hr_est_95, c(0.95, 0.97, 0.98, 0.99, 1))
-# dropping HRs > 7.5 barely drops < 2% of the data
+# dropping HRs > 7.5 drops < 2% of the data
 round(mean(d$hr_est_95 > 7.5), 3)
+d <- filter(hr_est_95 < 7.5) # dropping extreme HR estimates)
 
 # location-scale model ----
 if(FALSE) {
@@ -104,13 +75,12 @@ if(FALSE) {
     
     family = gammals(),
     data = d,
-    subset = hr_est_95 < 7.5, # dropping extreme HR estimates
     method = 'REML',
     control = gam.control(trace = TRUE))
   
   beepr::beep()
   appraise(m_hr, point_alpha = 0.1) # overdispersed residuals
-  
+  plot(m_hr, pages = 1)
   saveRDS(m_hr, paste0('models/m_hr-hgamls-', Sys.Date(), '.rds'))
 } else {
   m_hr <- readRDS('models/m_hr-hgamls-2024-03-27.rds')

@@ -5,38 +5,18 @@ library('mgcv')      # for modeling
 library('lubridate') # for working with dates
 library('ggplot2')    # for fancy plots
 library('gratia')    # for predicting from models
+library('ctmm')  # for movement modeling
 theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 
 d <- readRDS('data/years-1-and-2-data.rds') %>%
-  mutate(animal = factor(animal),
-         study_year = factor(study_year),
-         sex_treatment = factor(paste(sex, study_site)),
-         s_t_y = factor(paste(sex, study_site, study_year))) %>%
-  # drop first 10 days for each animal to remove odd behaviors
-  group_by(animal, study_year) %>%
-  filter(date >= min(date) + 10) %>%
-  filter(! is.na(speed_gauss_est)) # loosing ~40% of the windows
+  filter(is.finite(speed)) # loosing ~40% of the windows
 
 # data is not continuous throughout the year
 hist(yday(d$date))
 
-# create a column of days since August 1st
-d <- mutate(d,
-            days_since_aug_1 = if_else(
-              # if in Aug, Sept, Oct, Nov, or Dec
-              month(date) >= 8,
-              # then calculate days since Aug 1
-              date - as.Date(paste0(year(date), '-08-01')),
-              # otherwise calculate days since Aug 1 of previous year 
-              date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-              as.numeric()) # convert difftime to numeric
-
-hist(d$days_since_aug_1) # now without breaks
-
 # plot the data ----
-# plot overall raw data
 p_speed <-
   mutate(d,
          sex = if_else(sex == 'f', 'females', 'males'),
@@ -44,10 +24,12 @@ p_speed <-
                              'Staten Island'),
          t_s = paste(treatment, sex),
          study_year = paste('Year', study_year)) %>%
-  ggplot(aes(date, speed_gauss_est, group = animal)) +
+  ggplot(aes(date, speed, group = animal)) +
   facet_grid(t_s ~ study_year, scales = 'free_x') +
   geom_vline(xintercept = REF_DATES, col = 'red') +
-  geom_line()
+  geom_line() +
+  labs(x = NULL,
+       y = expression(bold('Estimated weekly speed'~(km/day))))
 p_speed
 
 ggsave('figures/speed-estimates.png', p_speed, width = 8,
@@ -61,15 +43,18 @@ range(d$days_since_aug_1) # not close to 0 to 365
 
 # there are some high speed values, but they are well explained by the
 # model. There is an outlier with a speed ~ 8.5 km/day
-quantile(d$speed_gauss_est, c(0.9, 0.95, 0.975, 0.99, 0.995, 1))
-mean(d$speed_gauss_est > 12) # percentage of data lost
-hist(d$speed_gauss_est)
+quantile(d$speed, c(0.9, 0.95, 0.975, 0.99, 0.995, 1))
+mean(d$speed > 12) # percentage of data lost
+hist(d$speed)
 
 # location-scale model ----
+# using speed because speed_model_est risks providing biased
+# estimates if movement is not sampled properly
+#' using `bs = 'ad'` worsens AIC and BIC by >1500, even with `k = 30`
 if(FALSE) {
   m_speed <- gam(formula = list(
     # linear predictor for the mean
-    speed_gauss_est ~
+    speed ~
       # temporal sex- and treatment-level trends with different
       s(days_since_aug_1, by = sex_treatment, k = 10) +
       # accounts for differences in trends between years
@@ -85,7 +70,7 @@ if(FALSE) {
     family = gammals(),
     data = d,
     method = 'REML',
-    control = gam.control(trace = FALSE))
+    control = gam.control(trace = TRUE))
   
   appraise(m_speed, method = 'simulate')
   plot(m_speed, pages = 1)
@@ -109,7 +94,7 @@ d %>%
        large = resid(m_speed) > 3) %>%
   ggplot() +
   facet_grid(treatment ~ sex) +
-  geom_point(aes(fitted, speed_gauss_est, color = large, alpha = large)) +
+  geom_point(aes(fitted, speed, color = large, alpha = large)) +
   labs(x = 'Fitted values', y = 'Observed values') +
   scale_color_manual('Deviance residuals > 3', values = 1:2) +
   scale_alpha_manual('Deviance residuals > 3', values = c(0.3, 1)) +

@@ -1,12 +1,15 @@
-library('dplyr') # for data wrangling
-library('purrr') # for map_dfr()
-library('ctmm')  # for movement modeling
+library('dplyr')     # for data wrangling
+library('purrr')     # for functional programming
+library('lubridate') # for working with data
+library('ctmm')      # for movement modeling
 
+# find names of moving window files
 files <- list.files(path = 'data',
                     pattern = '-window-7-days-dt-3-days.rds',
                     full.names = TRUE, recursive = TRUE)
 length(files) # should be 124
 
+# import moving window data
 d <- map_dfr(files,
              function(.filename) {
                year <- substr(.filename,
@@ -17,7 +20,7 @@ d <- map_dfr(files,
                  select(! distance_est:distance_upr) %>%
                  mutate(study_year = as.numeric(year)) %>%
                  relocate(study_year, .before = 1)
-               # some datasets have a column of window size called d.length
+               # some datasets extra unnecessary columns
                if('d.length' %in% colnames(.d)) {
                  .d <- select(.d, ! d.length)
                }
@@ -30,58 +33,73 @@ d <- map_dfr(files,
 
 colnames(d)
 
-filter(d, is.na(animal))$model # two windows with insufficient data
-d <- filter(d, ! is.na(animal)) # drops rows with no movement model
+# drop windows with insufficient data
+filter(d, map_chr(model, \(x) class(x)) != 'ctmm')$model
+d <- filter(d, map_chr(model, \(x) class(x)) == 'ctmm')
 
-# all units are consistent
-unique(d$diffusion_units)
-unique(d$tau_p_units)
-unique(d$tau_v_units)
-unique(d$hr_units)
-unique(d$speed_model_units) # from the speed() function
-unique(d$speed_gauss_units) # from the movement model
-
-# change missing speeds to NA
-d <- mutate(d,
-            speed_gauss_lwr = if_else(is.finite(speed_gauss_est), speed_gauss_lwr, NA_real_),
-            speed_gauss_est = if_else(is.finite(speed_gauss_est), speed_gauss_est, NA_real_),
-            speed_gauss_upr = if_else(is.finite(speed_gauss_est), speed_gauss_upr, NA_real_),
-            speed_model_lwr = if_else(is.finite(speed_gauss_est), speed_model_lwr, NA_real_),
-            speed_model_est = if_else(is.finite(speed_gauss_est), speed_model_est, NA_real_),
-            speed_model_upr = if_else(is.finite(speed_gauss_est), speed_model_upr, NA_real_))
-
-# only keep necessary columns
-d <- d %>%
+# add speed and diffusion estimates, and DOF for each parameter ----
+d <-
+  mutate(d,
+         # estimates
+         diff_lwr = map_dbl(model, \(.m) ctmm:::diffusion(.m)[1]),
+         diff_est = map_dbl(model, \(.m) ctmm:::diffusion(.m)[2]),
+         diff_upr = map_dbl(model, \(.m) ctmm:::diffusion(.m)[3]),
+         speed_obj = map(model, \(.m) speed(.m, level = 0) %>%
+                           suppressWarnings()), # for non-OUF models
+         speed_est = map_dbl(speed_obj, \(.s) .s$CI[, 'est']),
+         #' change missing speeds from `Inf` to `NA`
+         speed_est = if_else(is.finite(speed_est), speed_est, NA_real_),
+         # add units and convert accordingly
+         area_units = 'km^2', # already converted
+         diff_units = 'km^2/day',
+         diffusion_est = diff_units %#% diffusion_est,
+         speed_units = 'km/day',
+         speed_est = speed_units %#% speed_est,
+         # find degrees of freedom (returns 0 if value is NA)
+         dof_area = map_dbl(model, \(.m) ctmm:::DOF.area(.m)),
+         dof_diff = map_dbl(model, \(.m) summary(.m)$DOF['diffusion']),
+         dof_speed = map_dbl(model, \(.m) ctmm:::DOF.speed(.m))) %>%
+  # only keep necessary columns
   rename(tel = dataset) %>%
-  select(
-    study_year,
-    animal,
-    tel,
-    model,
-    akde,
-    tau_p_units, tau_p_est, tau_p_lwr, tau_p_upr,
-    tau_v_units, tau_v_est, tau_v_lwr, tau_v_upr,
-    speed_gauss_units, speed_gauss_est, speed_gauss_lwr, speed_gauss_upr,
-    speed_model_units, speed_model_est, speed_model_lwr, speed_model_upr,
-    hr_units, hr_est_50, hr_lwr_50, hr_upr_50,
-    hr_est_95, hr_lwr_95, hr_upr_95,
-    diffusion_units, diffusion_est, diffusion_lwr, diffusion_upr,
-    posixct, date)
-
-# add metatada on each individual
-metadata <- read.csv('data/reference_data.csv') %>%
-  rename(animal = id)
-
-d_final <- left_join(d, metadata, by = c('animal', 'study_year')) %>%
+  select(study_year, animal, posixct, date,
+         tel, model, akde,
+         # tau_p_units, tau_p_est, tau_p_lwr, tau_p_upr,
+         # tau_v_units, tau_v_est, tau_v_lwr, tau_v_upr,
+         speed_units, speed_est,
+         hr_units, hr_est_95, hr_lwr_95, hr_upr_95,
+         # hr_est_50, hr_lwr_50, hr_upr_50,
+         diffusion_units, diffusion_est) %>%
+  # add metadata on each individual
+  left_join(read.csv('data/reference_data.csv'),
+            by = c('animal' = 'id', 'study_year')) %>%
+  # add 
   mutate(animal = factor(animal),
          study_year = factor(study_year),
          animal_year = factor(paste(animal, study_year)),
          sex_treatment = factor(paste(sex, study_site)),
-         s_t_y = factor(paste(sex, study_site, study_year)),
-         # dof_area from ctmm and akde are identical
-         dof_area = map_dbl(model, \(.m) summary(.m)$DOF['area']),
-         dof_diff = map_dbl(model, \(.m) summary(.m)$DOF['diffusion']),
-         dof_speed = map_dbl(model, \(.m) summary(.m)$DOF['speed']))
+         s_t_y = factor(paste(sex, study_site, study_year))) %>%
+  # drop first ~10 days for each animal to remove odd behaviors
+  group_by(animal, study_year) %>%
+  filter(date >= min(date) + 10) %>% # equivalent to using the first day
+  ungroup() %>%
+  # create a column of days since August 1st
+  mutate(days_since_aug_1 =
+           if_else(
+             # if in Aug, Sept, Oct, Nov, or Dec
+             month(date) >= 8,
+             # then calculate days since Aug 1
+             date - as.Date(paste0(year(date), '-08-01')),
+             # otherwise calculate days since Aug 1 of previous year 
+             date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
+           as.numeric()) # convert difftime to numeric
 
-# save the final dataset
-saveRDS(object = d_final, file = 'data/years-1-and-2-data.rds')
+hist(yday(d$date)) # data is not continuous throughout the year
+hist(d$days_since_aug_1) # now continuous
+
+# save the final dataset ----
+saveRDS(object = d, file = 'data/years-1-and-2-data.rds')
+
+# version without models to push to GitHub
+d %>%
+  select(! akde) %>%
+  saveRDS(file = 'data/years-1-and-2-data-no-akde.rds')

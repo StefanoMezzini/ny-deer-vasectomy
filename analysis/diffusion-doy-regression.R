@@ -9,34 +9,9 @@ source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 
 d <- readRDS('data/years-1-and-2-data.rds') %>%
-  mutate(animal = factor(animal),
-         study_year = factor(study_year),
-         sex_treatment = factor(paste(sex, study_site)),
-         s_t_y = factor(paste(sex, study_site, study_year))) %>%
-  # drop first 10 days for each animal to remove odd behaviors
-  group_by(animal, study_year) %>%
-  filter(date >= min(date) + 10) %>%
-  ungroup() %>%
   filter(! is.na(diffusion_est)) # 67 NA values
 
-# data is not continuous throughout the year
-hist(yday(d$date))
-
-# create a column of days since August 1st
-d <- mutate(d,
-            days_since_aug_1 = if_else(
-              # if in Aug, Sept, Oct, Nov, or Dec
-              month(date) >= 8,
-              # then calculate days since Aug 1
-              date - as.Date(paste0(year(date), '-08-01')),
-              # otherwise calculate days since Aug 1 of previous year 
-              date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-              as.numeric()) # convert difftime to numeric
-
-hist(d$days_since_aug_1) # now without breaks
-
-# plot the data ----
-# plot overall raw data
+# plot the raw data ----
 p_diffusion <-
   mutate(d,
          sex = if_else(sex == 'f', 'females', 'males'),
@@ -69,10 +44,14 @@ if(FALSE) {
   m_diffusion <- gam(formula = list(
     # linear predictor for the mean
     diffusion_est ~
-      # temporal sex- and treatment-level trends with different
-      s(days_since_aug_1, by = sex_treatment, k = 10) +
-      # accounts for differences in trends between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 6, bs = 'sz') +
+      # temporal sex- and treatment-level trends with different smoothness
+      #' using different smoothness for each `sex_treatment` and high `k`
+      #' because females have cyclical estrous periods, while males do not
+      s(days_since_aug_1, by = sex_treatment, k = 30, bs = 'ad') +
+      # accounts for deviation from average between years
+      #' keeping `by = sex_treatment` and high `k` to account for full
+      #' differences between years
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 30, bs = 'sz') +
       # accounts for differences between individuals
       s(animal, bs = 're'),
     
@@ -87,6 +66,7 @@ if(FALSE) {
     control = gam.control(trace = TRUE))
   
   appraise(m_diffusion)
+  plot(m_diffusion, pages = 1)
   saveRDS(m_diffusion, paste0('models/m_diffusion-hgamls-', Sys.Date(), '.rds'))
 } else {
   m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-03-25.rds')
