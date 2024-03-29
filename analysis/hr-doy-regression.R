@@ -5,9 +5,9 @@ library('mgcv')      # for modeling
 library('lubridate') # for working with dates
 library('ggplot2')    # for fancy plots
 library('gratia')    # for predicting from models
-theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
+source('analysis/figures/default-theme.R')
 
 d <- readRDS('data/years-1-and-2-data-no-akde.rds')
 mean(map_dbl(d$model, ctmm:::DOF.area) < 2)
@@ -91,11 +91,6 @@ if(FALSE) {
 
 plot(m_hr, pages = 1, scheme = c(rep(1, 4), rep(0, 6)))
 summary(m_hr)
-
-ggplot() +
-  geom_point(aes(m_hr$fitted.values[, 1], m_hr$model$hr_est_95),
-             alpha = 0.2) +
-  geom_abline(intercept = 0, slope = 1, color = 'red')
 
 # check what groups cause oddly large outliers
 d %>%
@@ -204,7 +199,7 @@ p_mu <-
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
-              alpha = 0.3) +
+              alpha = 0.5) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -222,7 +217,7 @@ p_s <-
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
-                  fill = site), alpha = 0.3) +
+                  fill = site), alpha = 0.5) +
   geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -287,7 +282,7 @@ p_mu_y <-
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
-              alpha = 0.3) +
+              alpha = 0.5) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -305,7 +300,7 @@ p_s <-
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
-                  fill = site), alpha = 0.3) +
+                  fill = site), alpha = 0.5) +
   geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
