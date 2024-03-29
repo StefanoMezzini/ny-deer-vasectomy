@@ -9,7 +9,7 @@ theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 
-d <- readRDS('data/years-1-and-2-data.rds')
+d <- readRDS('data/years-1-and-2-data-no-akde.rds')
 mean(map_dbl(d$model, ctmm:::DOF.area) < 2)
 quantile(map_dbl(d$model, ctmm:::DOF.area), probs = c(0, 0.01, 0.02, 0.05))
 
@@ -24,9 +24,12 @@ p_hr <-
   ggplot(aes(date, hr_est_95)) +
   facet_grid(t_s ~ study_year, scales = 'free') +
   geom_vline(xintercept = REF_DATES, col = 'red') +
-  geom_line(aes(group = animal)) +
+  geom_line(aes(group = animal, color = has_fawn)) +
+  scale_color_manual('Fawned', values = c('black', 'darkorange2')) +
   labs(x = NULL,
-       y = expression(bold('Estimated 7-day space-use requirements'~(km^2))))
+       y = expression(bold('Estimated 7-day space-use requirements'~
+                             (km^2)))) +
+  theme(legend.position = 'top')
 p_hr
 
 ggsave('figures/hr-estimates.png', p_hr, width = 8, height = 8, dpi = 600,
@@ -105,20 +108,28 @@ d %>%
 d %>%
   filter(hr_est_95 < 7.5) %>%
   mutate(sex = if_else(sex == 'f', 'Females', 'Males'),
-       treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
-                           'Staten Island'),
-       fitted = m_hr$fitted.values[, 1],
-       large = resid(m_hr) > 3) %>%
+         treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
+                             'Staten Island'),
+         fitted = m_hr$fitted.values[, 1],
+         large = resid(m_hr) > 3,
+         sex_fawn = paste0(
+           sex,
+           case_when(sex == 'Males' ~ '',
+                     sex == 'Females' & has_fawn ~ ' with known fawn',
+                     sex == 'Females' & ! has_fawn ~ ' with unknown fawn'))) %>%
   ggplot() +
-  facet_grid(treatment ~ sex) +
+  facet_grid(treatment ~ sex_fawn) +
   geom_point(aes(fitted, hr_est_95, color = large, alpha = large)) +
+  geom_abline(slope = 1, intercept = 0, color = 'grey') +
   labs(x = 'Fitted values', y = 'Observed values') +
+  xlim(c(0, max(m_hr$model$hr_est_95))) +
+  ylim(c(0, max(m_hr$model$hr_est_95))) +
   scale_color_manual('Deviance residuals > 3', values = 1:2) +
-  scale_alpha_manual('Deviance residuals > 3', values = c(0.3, 1)) +
-  theme(legend.position = 'top')
+  scale_alpha_manual('Deviance residuals > 3', values = c(0.2, 1)) +
+  theme(legend.position = c(0.1, 0.93))
 
-ggsave('figures/hr-model-obs-fitted.png', width = 8, height = 8, dpi = 600,
-       bg = 'white')
+ggsave('figures/hr-model-obs-fitted.png', width = 12, height = 8,
+       dpi = 600, bg = 'white')
 
 # check periods of oddly large outliers
 d %>%
@@ -168,12 +179,12 @@ preds_mu <- gammals_mean(model = m_hr, data = newd, nsims = 1e4,
                           site == 'staten_island' ~ 'Staten Island'))
 
 preds_s <- gammals_var(model = m_hr, data = newd, nsims = 1e4,
-                        unconditional = FALSE,
-                        # not excluding the term results in NA
-                        exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
-                                    's(days_since_aug_1,study_year):sex_treatmentf staten_island',
-                                    's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
-                                    's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
+                       unconditional = FALSE,
+                       # not excluding the term results in NA
+                       exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
+                                   's(days_since_aug_1,study_year):sex_treatmentf staten_island',
+                                   's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
+                                   's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
   group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
   summarize(lwr_95 = quantile(variance, 0.025),
             s2 = quantile(variance, 0.500),
