@@ -1,15 +1,23 @@
 library('dplyr')     # for data wrangling
 library('tidyr')     # for data wrangling
+library('purrr')     # for functional programming
 library('mgcv')      # for modeling
 library('lubridate') # for working with dates
 library('ggplot2')    # for fancy plots
 library('gratia')    # for predicting from models
-theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
+source('analysis/figures/default-theme.R')
 
-d <- readRDS('data/years-1-and-2-data.rds') %>%
-  filter(! is.na(diffusion_est)) # 67 NA values
+d <- readRDS('data/years-1-and-2-data-no-akde.rds') %>%
+  filter(! is.na(diffusion_est)) %>% # 67 NA values
+  mutate(dof_diffusion = map_dbl(model, \(.m) summary(.m)$DOF['diffusion']))
+
+# some low values, but common between both males and females in Rockefeller
+quantile(d$dof_diffusion)
+ggplot(d, aes(dof_diffusion)) +
+  facet_grid(sex ~ study_site) +
+  geom_histogram()
 
 # plot the raw data ----
 p_diffusion <-
@@ -29,35 +37,31 @@ p_diffusion
 ggsave('figures/diffusion-estimates.png', p_diffusion, width = 8,
        height = 8, dpi = 600, bg = 'white')
 
-# start by fitting a Hierarchical Generalized Additive Model ----
+# fit a Hierarchical Generalized Additive Model for Location and Scale ----
 # not using cyclic cubic splines because the gap is too big
 # for year 1 the gap is even bigger
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
-# location-scale model ----
-# too many high values (2-8) but predicted to be < 1
-# need to use 14-day moving window instead
 if(FALSE) {
-  sum(d$diffusion_est > 4)
-  
   m_diffusion <- gam(formula = list(
     # linear predictor for the mean
     diffusion_est ~
       # temporal sex- and treatment-level trends with different smoothness
       #' using different smoothness for each `sex_treatment` and high `k`
       #' because females have cyclical estrous periods, while males do not
-      s(days_since_aug_1, by = sex_treatment, k = 30, bs = 'ad') +
+      s(days_since_aug_1, by = sex_treatment, k = 15) +
       # accounts for deviation from average between years
       #' keeping `by = sex_treatment` and high `k` to account for full
       #' differences between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 30, bs = 'sz') +
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 15, bs = 'sz') +
       # accounts for differences between individuals
       s(animal, bs = 're'),
     
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
+    # using a by smooth does not impprove the model
     ~ s(days_since_aug_1, sex_treatment, k = 5, bs = 'fs')),
     
     family = gammals(),
@@ -65,19 +69,12 @@ if(FALSE) {
     method = 'REML',
     control = gam.control(trace = TRUE))
   
-  appraise(m_diffusion)
+  appraise(m_diffusion, point_alpha = 0.05)
   plot(m_diffusion, pages = 1)
   saveRDS(m_diffusion, paste0('models/m_diffusion-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-03-25.rds')
+  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-04-04.rds')
 }
-
-plot(m_diffusion, pages = 1)
-
-ggplot() +
-  geom_point(aes(m_diffusion$fitted.values[, 1], m_diffusion$model$diffusion),
-             alpha = 0.2) +
-  geom_abline(intercept = 0, slope = 1, color = 'red')
 
 # check what groups cause oddly large outliers
 mutate(d,
@@ -96,6 +93,27 @@ mutate(d,
 
 ggsave('figures/diffusion-model-obs-fitted.png', width = 8, height = 8,
        dpi = 600, bg = 'white')
+
+p_diffusion_2 <-
+  mutate(d,
+         sex = if_else(sex == 'f', 'females', 'males'),
+         treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
+                             'Staten Island'),
+         t_s = paste(treatment, sex),
+         study_year = paste('Year', study_year),
+         large = resid(m_diffusion) > 3) %>%
+  ggplot(aes(date, diffusion_est, group = animal)) +
+  facet_grid(t_s ~ study_year, scales = 'free') +
+  geom_vline(xintercept = REF_DATES, col = 'red') +
+  geom_line(aes(color = large)) +
+  labs(x = NULL, y = expression(bold('Estimated diffusion'~(km^2/day)))) +
+  scale_color_manual('Deviance residuals > 3',
+                     values = c('black', 'darkorange2')) +
+  theme(legend.position = 'top')
+p_diffusion_2
+
+ggsave('figures/diffusion-estimates-outliers.png', p_diffusion_2,
+       width = 8, height = 8, dpi = 600, bg = 'white')
 
 # check periods of oddly large outliers
 d %>%
@@ -265,7 +283,7 @@ ggsave('figures/diffusion-mean-years.png',
        p_mu_y, width = 16, height = 8, dpi = 600, bg = 'white')
 
 # variance in diffusion ---
-p_s <-
+p_s_y <-
   ggplot(preds_s_years, aes(group = sex_treatment)) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
@@ -277,7 +295,7 @@ p_s <-
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
   ylab(expression(bold('SD in diffusion'~(km^2/day)))) +
-  theme(legend.position = 'top'); p_s
+  theme(legend.position = 'top'); p_s_y
 
-ggsave('figures/diffusion-sd-years.png', p_s, width = 16, height = 8,
+ggsave('figures/diffusion-sd-years.png', p_s_y, width = 16, height = 8,
        dpi = 600, bg = 'white')
