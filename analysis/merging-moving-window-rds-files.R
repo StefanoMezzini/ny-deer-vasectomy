@@ -72,7 +72,7 @@ d <-
   # add metadata on each individual
   left_join(read.csv('data/reference_data.csv'),
             by = c('animal' = 'id', 'study_year')) %>%
-  # add 
+  # add factors for models
   mutate(animal = factor(animal),
          study_year = factor(study_year),
          animal_year = factor(paste(animal, study_year)),
@@ -91,15 +91,30 @@ d <-
              date - as.Date(paste0(year(date), '-08-01')),
              # otherwise calculate days since Aug 1 of previous year 
              date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-           as.numeric()) # convert difftime to numeric
+           as.numeric(), # convert difftime to numeric
+         has_fawn =
+           (study_year == 1 & animal %in% c('12', '14b', '15b', '16')) |
+           (study_year == 2 & animal %in% c('1', '16', '123')))
+
+# check if fawns have been assigned correctly
+filter(d, has_fawn) %>%
+  group_by(study_year) %>%
+  summarize(n = n_distinct(animal),
+            which = paste(unique(animal), collapse = ', '))
+
+# check which treatments the does with fawns are in
+d %>%
+  filter(sex == 'f') %>%
+  group_by(study_site, study_year) %>%
+  summarize(prop = mean(has_fawn))
 
 hist(yday(d$date)) # data is not continuous throughout the year
-hist(d$days_since_aug_1) # now continuous
+hist(d$days_since_aug_1) # with days since August 1
 
 # save the final dataset ----
 saveRDS(object = d, file = 'data/years-1-and-2-data-akde.rds')
 
-# version without models to push to GitHub
+# version without akdes to push to keep < 100 MB and push to GitHub
 d %>%
   select(! akde) %>%
   saveRDS(file = 'data/years-1-and-2-data-no-akde.rds')
