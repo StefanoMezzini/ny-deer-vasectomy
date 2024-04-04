@@ -272,7 +272,7 @@ p_s_y <-
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
   ylab('SD in distance travelled (km/day)') +
-  theme(legend.position = 'top'); p_s
+  theme(legend.position = 'top'); p_s_y
 
 ggsave('figures/speed-sd-years.png', p_s_y, width = 16, height = 8, dpi = 600,
        bg = 'white')
