@@ -6,15 +6,16 @@ library('lubridate') # for working with dates
 library('ggplot2')    # for fancy plots
 library('gratia')    # for predicting from models
 library('ctmm')  # for movement modeling
-theme_set(theme_bw() + theme(text = element_text(face = 'bold')))
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
+source('analysis/figures/default-theme.R')
 
-d <- readRDS('data/years-1-and-2-data.rds') %>%
-  filter(is.finite(speed)) # loosing ~40% of the windows
+d <- readRDS('data/years-1-and-2-data-no-akde.rds') %>%
+  filter(is.finite(speed_est)) %>% # loosing ~40% of the windows
+  mutate(dof_speed = map_dbl(model, ctmm:::DOF.speed))
 
-# data is not continuous throughout the year
-hist(yday(d$date))
+range(d$dof_speed) # range may be ok
+hist(d$dof_speed)
 
 # plot the data ----
 p_speed <-
@@ -24,7 +25,7 @@ p_speed <-
                              'Staten Island'),
          t_s = paste(treatment, sex),
          study_year = paste('Year', study_year)) %>%
-  ggplot(aes(date, speed, group = animal)) +
+  ggplot(aes(date, speed_est, group = animal)) +
   facet_grid(t_s ~ study_year, scales = 'free_x') +
   geom_vline(xintercept = REF_DATES, col = 'red') +
   geom_line() +
@@ -35,26 +36,22 @@ p_speed
 ggsave('figures/speed-estimates.png', p_speed, width = 8,
        height = 8, dpi = 600, bg = 'white')
 
-# fitting a Hierarchical Generalized Additive Model for Location and Scale ----
+# fit a Hierarchical Generalized Additive Model for Location and Scale ----
 # not using cyclic cubic splines because the gap is too big
 # for year 1 the gap is even bigger
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
 # there are some high speed values, but they are well explained by the
-# model. There is an outlier with a speed ~ 8.5 km/day
-quantile(d$speed, c(0.9, 0.95, 0.975, 0.99, 0.995, 1))
-mean(d$speed > 12) # percentage of data lost
-hist(d$speed)
+# model. The slight overdispersion is caused by low speeds more than high
+# speeds 
 
 # location-scale model ----
-# using speed because speed_model_est risks providing biased
-# estimates if movement is not sampled properly
 #' using `bs = 'ad'` worsens AIC and BIC by >1500, even with `k = 30`
 if(FALSE) {
   m_speed <- gam(formula = list(
     # linear predictor for the mean
-    speed ~
+    speed_est ~
       # temporal sex- and treatment-level trends with different
       s(days_since_aug_1, by = sex_treatment, k = 10) +
       # accounts for differences in trends between years
@@ -65,19 +62,19 @@ if(FALSE) {
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
-    ~ s(days_since_aug_1, sex_treatment, k = 5, bs = 'fs')),
+    ~ s(days_since_aug_1, by = sex_treatment, k = 10)),
     
     family = gammals(),
     data = d,
     method = 'REML',
     control = gam.control(trace = TRUE))
   
-  appraise(m_speed, method = 'simulate')
-  plot(m_speed, pages = 1)
+  appraise(m_speed, method = 'simulate', n_bins = 30, point_alpha = 0.1)
+  plot(m_speed, pages = 1) #' `gratia::draw()` doesn't support `bs = 'sz'`
   
   saveRDS(m_speed, paste0('models/m_speed-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_speed <- readRDS('models/m_speed-hgamls-2024-03-23.rds')
+  m_speed <- readRDS('models/m_speed-hgamls-2024-04-04.rds')
 }
 
 appraise(m_speed, method = 'simulate')
@@ -94,7 +91,7 @@ d %>%
        large = resid(m_speed) > 3) %>%
   ggplot() +
   facet_grid(treatment ~ sex) +
-  geom_point(aes(fitted, speed, color = large, alpha = large)) +
+  geom_point(aes(fitted, speed_est, color = large, alpha = large)) +
   labs(x = 'Fitted values', y = 'Observed values') +
   scale_color_manual('Deviance residuals > 3', values = 1:2) +
   scale_alpha_manual('Deviance residuals > 3', values = c(0.3, 1)) +
@@ -167,7 +164,7 @@ p_mu <-
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
-              alpha = 0.3) +
+              alpha = 0.5) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -185,7 +182,7 @@ p_s <-
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
-                  fill = site), alpha = 0.3) +
+                  fill = site), alpha = 0.5) +
   geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -250,7 +247,7 @@ p_mu_y <-
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
-              alpha = 0.3) +
+              alpha = 0.5) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -263,12 +260,12 @@ ggsave('figures/speed-mean-years.png',
        p_mu_y, width = 16, height = 8, dpi = 600, bg = 'white')
 
 # variance in speed ---
-p_s <-
+p_s_y <-
   ggplot(preds_s_years, aes(group = sex_treatment)) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
-                  fill = site), alpha = 0.3) +
+                  fill = site), alpha = 0.5) +
   geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -277,5 +274,5 @@ p_s <-
   ylab('SD in distance travelled (km/day)') +
   theme(legend.position = 'top'); p_s
 
-ggsave('figures/speed-sd-years.png', p_s, width = 16, height = 8, dpi = 600,
+ggsave('figures/speed-sd-years.png', p_s_y, width = 16, height = 8, dpi = 600,
        bg = 'white')
