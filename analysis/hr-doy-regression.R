@@ -23,25 +23,31 @@ p_hr <-
          study_year = paste('Year', study_year)) %>%
   ggplot(aes(date, hr_est_95)) +
   facet_grid(t_s ~ study_year, scales = 'free') +
+  geom_hline(yintercept = 10, col = 'grey') +
   geom_vline(xintercept = REF_DATES, col = 'red') +
   geom_line(aes(group = animal, color = has_fawn)) +
-  scale_color_manual('Fawned', values = c('black', 'darkorange2')) +
+  scale_color_manual('Confirmed fawn', values = c('black', 'darkorange2'),
+                     labels = c('No', 'Yes')) +
   labs(x = NULL,
        y = expression(bold('Estimated 7-day space-use requirements'~
                              (km^2)))) +
   theme(legend.position = 'top')
 p_hr
 
-ggsave('figures/hr-estimates.png', p_hr, width = 8, height = 8, dpi = 600,
-       bg = 'white')
+ggsave('figures/hr-estimates.png',
+       p_hr, width = 8, height = 8, dpi = 600, bg = 'white')
 
-# find males with large HRs on S Island
-filter(d, sex_treatment == 'm staten_island', hr_est_95 > 15) %>%
-  select(study_year, animal, Age)
+# dropping excessively high HRs ----
+quantile(d$hr_est_95, c(0.95, 0.97, 0.98, 0.99, 1))
+# dropping HRs > 10 drops ~1.1% of the data
+round(mean(d$hr_est_95 > 10), 3) * 100
 
-# find males with large HRs on Rockefeller
-filter(d, sex_treatment == 'm rockefeller', hr_est_95 > 7.5) %>%
-  select(study_year, animal, Age)
+# percent of data dropped by group when filtering to HR < 10
+d %>%
+  group_by(sex_treatment) %>%
+  summarise(perc_outliers = round(mean(hr_est_95 > 10) * 100, 2))
+
+d <- filter(d, hr_est_95 < 10) # dropping extreme HR estimates
 
 # fit a Hierarchical Generalized Additive Model for Location and Scale ----
 # not using cyclic cubic splines because the gap is too big
@@ -49,59 +55,51 @@ filter(d, sex_treatment == 'm rockefeller', hr_est_95 > 7.5) %>%
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
-# some very high HRs
-quantile(d$hr_est_95, c(0.95, 0.97, 0.98, 0.99, 1))
-# dropping HRs > 7.5 drops < 2% of the data
-round(mean(d$hr_est_95 > 7.5), 3)
-d <- filter(hr_est_95 < 7.5) # dropping extreme HR estimates)
-
-# location-scale model ----
 if(FALSE) {
+  # bs = 'tp', k = 15: dev.expl = 60.1%
+  # bs = 'tp', k = 10, with REs for scale: dev.expl = 76.1%
+  # bs = 'tp', k = 15, with REs for scale: dev.expl = 76.4%
+  # bs = 'ad', k = 30: shows clear estrous cylcles (SIF), dev.expl = 68.2%
+  # bs = 'ad', k = 30, s(age) and ti(age, doy) by group: dev.expl = 69.3%
   m_hr <- gam(formula = list(
     # linear predictor for the mean
     hr_est_95 ~
       # temporal sex- and treatment-level trends with different smoothness
       #' using different smoothness for each `sex_treatment` and high `k`
       #' because females have cyclical estrous periods, while males do not
-      s(days_since_aug_1, by = sex_treatment, k = 30, bs = 'ad') +
+      #' `k = 30` gives excessive wiggliness after estrous period
+      s(days_since_aug_1, by = sex_treatment, k = 10, bs = 'tp') +
       # accounts for deviation from average between years
       #' keeping `by = sex_treatment` and high `k` to account for full
       #' differences between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 30, bs = 'sz') +
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 10, bs = 'sz') +
       # accounts for differences between individuals
       s(animal, bs = 're'),
     
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
-    ~ s(days_since_aug_1, sex_treatment, k = 6, bs = 'fs')),
+    #' increasong `k` above 10 or using adaptive splines does not fix the
+    #' overdispersion
+    ~ s(days_since_aug_1, by = sex_treatment, k = 10) +
+      # accounts for differences between individuals
+      s(animal, bs = 're')),
     
     family = gammals(),
     data = d,
     method = 'REML',
     control = gam.control(trace = TRUE))
   
-  beepr::beep()
-  appraise(m_hr, point_alpha = 0.1) # overdispersed residuals
-  plot(m_hr, pages = 1)
+  appraise(m_hr, point_alpha = 0.1, n_bins = 30)
+  summary(m_hr)
+  plot(m_hr, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0))
   saveRDS(m_hr, paste0('models/m_hr-hgamls-', Sys.Date(), '.rds'))
 } else {
   m_hr <- readRDS('models/m_hr-hgamls-2024-03-27.rds')
 }
 
-plot(m_hr, pages = 1, scheme = c(rep(1, 4), rep(0, 6)))
-summary(m_hr)
-
 # check what groups cause oddly large outliers
 d %>%
-  filter(hr_est_95 < 7.5) %>%
-  filter(hr_est_95 > 4, m_hr$fitted.values[, 1] < 4) %>%
-  group_by(sex_treatment) %>%
-  summarise(n = n(), .groups = 'drop') %>%
-  mutate(prop = round(n / sum(n), 2))
-
-d %>%
-  filter(hr_est_95 < 7.5) %>%
   mutate(sex = if_else(sex == 'f', 'Females', 'Males'),
          treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
                              'Staten Island'),
@@ -128,7 +126,6 @@ ggsave('figures/hr-model-obs-fitted.png', width = 12, height = 8,
 
 # check periods of oddly large outliers
 d %>%
-  filter(hr_est_95 < 7.5) %>%
   filter(hr_est_95 > 4, m_hr$fitted.values[, 1] < 4) %>%
   ggplot() +
   facet_grid(study_site ~ sex) +
@@ -295,7 +292,7 @@ ggsave('figures/hr-mean-years.png',
        p_mu_y, width = 16, height = 8, dpi = 600, bg = 'white')
 
 # variance in HR ---
-p_s <-
+p_s_y <-
   ggplot(preds_s_years, aes(group = sex_treatment)) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
@@ -307,7 +304,7 @@ p_s <-
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
   ylab(expression(bold('SD in 7-day space-use requirements'~(km^2)))) +
-  theme(legend.position = 'top'); p_s
+  theme(legend.position = 'top'); p_s_y
 
-ggsave('figures/hr-sd-years.png', p_s, width = 16, height = 8, dpi = 600,
+ggsave('figures/hr-sd-years.png', p_s_y, width = 16, height = 8, dpi = 600,
        bg = 'white')
