@@ -57,10 +57,10 @@ range(d$days_since_aug_1) # not close to 0 to 365
 
 if(FALSE) {
   # bs = 'tp', k = 15: dev.expl = 60.1%
-  # bs = 'tp', k = 10, with REs for scale: dev.expl = 76.1%
-  # bs = 'tp', k = 15, with REs for scale: dev.expl = 76.4%
   # bs = 'ad', k = 30: shows clear estrous cylcles (SIF), dev.expl = 68.2%
   # bs = 'ad', k = 30, s(age) and ti(age, doy) by group: dev.expl = 69.3%
+  # bs = 'tp', k = 10, with REs for scale: dev.expl = 76.1%
+  # bs = 'tp', k = 15, with REs for scale: dev.expl = 76.4%
   m_hr <- gam(formula = list(
     # linear predictor for the mean
     hr_est_95 ~
