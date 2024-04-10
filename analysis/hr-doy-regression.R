@@ -68,11 +68,11 @@ if(FALSE) {
       #' using different smoothness for each `sex_treatment` and high `k`
       #' because females have cyclical estrous periods, while males do not
       #' `k = 30` gives excessive wiggliness after estrous period
-      s(days_since_aug_1, by = sex_treatment, k = 10, bs = 'tp') +
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
       # accounts for deviation from average between years
       #' keeping `by = sex_treatment` and high `k` to account for full
       #' differences between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 10, bs = 'sz') +
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 15, bs = 'sz') +
       # accounts for differences between individuals
       s(animal, bs = 're'),
     
@@ -81,7 +81,7 @@ if(FALSE) {
     # sex- and treatment-level trends over season
     #' increasong `k` above 10 or using adaptive splines does not fix the
     #' overdispersion
-    ~ s(days_since_aug_1, by = sex_treatment, k = 10) +
+    ~ s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
       # accounts for differences between individuals
       s(animal, bs = 're')),
     
@@ -91,12 +91,14 @@ if(FALSE) {
     control = gam.control(trace = TRUE))
   
   appraise(m_hr, point_alpha = 0.1, n_bins = 30)
-  summary(m_hr)
+  #' `gratia::draw()` can't currently plot sz smooths
   plot(m_hr, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0))
   saveRDS(m_hr, paste0('models/m_hr-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_hr <- readRDS('models/m_hr-hgamls-2024-03-27.rds')
+  m_hr <- readRDS('models/m_hr-hgamls-2024-04-10.rds')
 }
+
+summary(m_hr)
 
 # check what groups cause oddly large outliers
 d %>%
@@ -205,8 +207,8 @@ p_mu <-
   ylab(expression(bold('Mean 7-day space-use requirements'~(km^2)))) +
   theme(legend.position = 'top'); p_mu
 
-ggsave('figures/hr-mean.png', p_mu, width = 8, height = 8, dpi = 600,
-       bg = 'white')
+ggsave('figures/hr-mean.png',
+       p_mu, width = 8, height = 8, dpi = 600, bg = 'white')
 
 # standard deviation in HR ---
 p_s <-
@@ -223,8 +225,8 @@ p_s <-
   ylab(expression(bold('SD in 7-day space-use requirements'~(km^2)))) +
   theme(legend.position = 'top'); p_s
 
-ggsave('figures/hr-sd.png', p_s, width = 8, height = 8, dpi = 600,
-       bg = 'white')
+ggsave('figures/hr-sd.png',
+       p_s, width = 8, height = 8, dpi = 600, bg = 'white')
 
 # plot the estimated trends for each year ----
 newd_years <-
@@ -306,5 +308,5 @@ p_s_y <-
   ylab(expression(bold('SD in 7-day space-use requirements'~(km^2)))) +
   theme(legend.position = 'top'); p_s_y
 
-ggsave('figures/hr-sd-years.png', p_s_y, width = 16, height = 8, dpi = 600,
-       bg = 'white')
+ggsave('figures/hr-sd-years.png',
+       p_s_y, width = 16, height = 8, dpi = 600, bg = 'white')

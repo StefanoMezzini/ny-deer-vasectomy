@@ -50,7 +50,7 @@ if(FALSE) {
       # temporal sex- and treatment-level trends with different smoothness
       #' using different smoothness for each `sex_treatment` and high `k`
       #' because females have cyclical estrous periods, while males do not
-      s(days_since_aug_1, by = sex_treatment, k = 15) +
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
       # accounts for deviation from average between years
       #' keeping `by = sex_treatment` and high `k` to account for full
       #' differences between years
@@ -61,8 +61,10 @@ if(FALSE) {
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
-    # using a by smooth does not impprove the model
-    ~ s(days_since_aug_1, sex_treatment, k = 5, bs = 'fs')),
+    # using a by smooth does not improve the model
+    ~ s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+      # accounts for differences between individuals
+      s(animal, bs = 're')),
     
     family = gammals(),
     data = d,
@@ -70,10 +72,12 @@ if(FALSE) {
     control = gam.control(trace = TRUE))
   
   appraise(m_diffusion, point_alpha = 0.05)
-  plot(m_diffusion, pages = 1)
+  #' `gratia::draw()` can't currently plot sz smooths
+  plot(m_diffusion, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0),
+       scale = 0)
   saveRDS(m_diffusion, paste0('models/m_diffusion-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-04-04.rds')
+  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-04-10.rds')
 }
 
 # check what groups cause oddly large outliers

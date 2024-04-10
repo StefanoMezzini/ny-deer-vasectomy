@@ -53,16 +53,18 @@ if(FALSE) {
     # linear predictor for the mean
     speed_est ~
       # temporal sex- and treatment-level trends with different
-      s(days_since_aug_1, by = sex_treatment, k = 10) +
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
       # accounts for differences in trends between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 10, bs = 'sz') +
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 15, bs = 'sz') +
       # accounts for differences between individuals
       s(animal, bs = 're'),
     
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
-    ~ s(days_since_aug_1, by = sex_treatment, k = 10)),
+    ~ s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+      # accounts for differences between individuals
+      s(animal, bs = 're')),
     
     family = gammals(),
     data = d,
@@ -70,25 +72,24 @@ if(FALSE) {
     control = gam.control(trace = TRUE))
   
   appraise(m_speed, method = 'simulate', n_bins = 30, point_alpha = 0.1)
-  plot(m_speed, pages = 1) #' `gratia::draw()` doesn't support `bs = 'sz'`
-  
+  #' `gratia::draw()` can't currently plot sz smooths
+  plot(m_speed, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0),
+       scale = 0)
   saveRDS(m_speed, paste0('models/m_speed-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_speed <- readRDS('models/m_speed-hgamls-2024-04-04.rds')
+  m_speed <- readRDS('models/m_speed-hgamls-2024-04-10.rds')
 }
 
-appraise(m_speed, method = 'simulate')
-plot(m_speed, pages = 1)
 summary(m_speed)
 
 # check what groups cause oddly large outliers
 d %>%
   ungroup() %>%
   mutate(sex = if_else(sex == 'f', 'Females', 'Males'),
-       treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
-                           'Staten Island'),
-       fitted = m_speed$fitted.values[, 1],
-       large = resid(m_speed) > 3) %>%
+         treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
+                             'Staten Island'),
+         fitted = m_speed$fitted.values[, 1],
+         large = resid(m_speed) > 3) %>%
   ggplot() +
   facet_grid(treatment ~ sex) +
   geom_point(aes(fitted, speed_est, color = large, alpha = large)) +
@@ -139,12 +140,12 @@ preds_mu <- gammals_mean(model = m_speed, data = newd, nsims = 1e4,
                           site == 'staten_island' ~ 'Staten Island'))
 
 preds_s <- gammals_var(model = m_speed, data = newd, nsims = 1e4,
-                        unconditional = FALSE,
-                        # not excluding the term results in NA
-                        exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
-                                    's(days_since_aug_1,study_year):sex_treatmentf staten_island',
-                                    's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
-                                    's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
+                       unconditional = FALSE,
+                       # not excluding the term results in NA
+                       exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
+                                   's(days_since_aug_1,study_year):sex_treatmentf staten_island',
+                                   's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
+                                   's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
   group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
   summarize(lwr_95 = quantile(variance, 0.025),
             s2 = quantile(variance, 0.500),
@@ -274,5 +275,5 @@ p_s_y <-
   ylab('SD in distance travelled (km/day)') +
   theme(legend.position = 'top'); p_s_y
 
-ggsave('figures/speed-sd-years.png', p_s_y, width = 16, height = 8, dpi = 600,
-       bg = 'white')
+ggsave('figures/speed-sd-years.png',
+       p_s_y, width = 16, height = 8, dpi = 600, bg = 'white')
