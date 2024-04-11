@@ -9,9 +9,23 @@ source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 source('analysis/figures/default-theme.R')
 
-d <- readRDS('data/years-1-and-2-data-no-akde.rds')
-mean(map_dbl(d$model, ctmm:::DOF.area) < 2)
-quantile(map_dbl(d$model, ctmm:::DOF.area), probs = c(0, 0.01, 0.02, 0.05))
+d <- readRDS('data/years-1-and-2-data-no-akde.rds') %>%
+  mutate(dof_area = map_dbl(model, ctmm:::DOF.area))
+
+# HR estimates with an ESS < 3 are likely biased
+hist(d$dof_area, breaks = 100)
+quantile(d$dof_area, probs = c(0, 0.01, 0.02, 0.05))
+mean(d$dof_area < 3)
+
+# HR estimates above 10 km^2 are unreliable for the study areas
+hist(d$hr_est_95, breaks = 100)
+quantile(d$hr_est_95, probs = c(0.95, 0.98, 0.99, 1))
+mean(d$hr_est_95 > 10)
+
+# check relationship between HR and ESS
+plot(map_dbl(d$model, ctmm:::DOF.area), d$hr_est_95)
+abline(v = 3, col = 'red') # ESS limit
+abline(h = 10, col = 'red') # arbitrary HR limit
 
 # plot the raw data ----
 p_hr <-
@@ -38,16 +52,15 @@ ggsave('figures/hr-estimates.png',
        p_hr, width = 8, height = 8, dpi = 600, bg = 'white')
 
 # dropping excessively high HRs ----
-quantile(d$hr_est_95, c(0.95, 0.97, 0.98, 0.99, 1))
-# dropping HRs > 10 drops ~1.1% of the data
-round(mean(d$hr_est_95 > 10), 3) * 100
-
 # percent of data dropped by group when filtering to HR < 10
 d %>%
   group_by(sex_treatment) %>%
   summarise(perc_outliers = round(mean(hr_est_95 > 10) * 100, 2))
 
-d <- filter(d, hr_est_95 < 10) # dropping extreme HR estimates
+d <- filter(d, hr_est_95 < 10, dof_area >= 3)
+
+plot(map_dbl(d$model, ctmm:::DOF.area), d$hr_est_95)
+abline(v = 3, col = 'red')
 
 # fit a Hierarchical Generalized Additive Model for Location and Scale ----
 # not using cyclic cubic splines because the gap is too big
@@ -95,7 +108,7 @@ if(FALSE) {
   plot(m_hr, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0))
   saveRDS(m_hr, paste0('models/m_hr-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_hr <- readRDS('models/m_hr-hgamls-2024-04-10.rds')
+  m_hr <- readRDS('models/m_hr-hgamls-2024-04-11.rds')
 }
 
 summary(m_hr)
@@ -112,6 +125,7 @@ d %>%
            case_when(sex == 'Males' ~ '',
                      sex == 'Females' & has_fawn ~ ' with known fawn',
                      sex == 'Females' & ! has_fawn ~ ' with unknown fawn'))) %>%
+  filter(dof_area > 10) %>%
   ggplot() +
   facet_grid(treatment ~ sex_fawn) +
   geom_point(aes(fitted, hr_est_95, color = large, alpha = large)) +
