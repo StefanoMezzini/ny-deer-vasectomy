@@ -71,7 +71,7 @@ if(FALSE) {
     method = 'REML',
     control = gam.control(trace = TRUE))
   
-  appraise(m_diffusion, point_alpha = 0.05)
+  appraise(m_diffusion, point_alpha = 0.05, n_bins = 30)
   #' `gratia::draw()` can't currently plot sz smooths
   plot(m_diffusion, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0),
        scale = 0)
