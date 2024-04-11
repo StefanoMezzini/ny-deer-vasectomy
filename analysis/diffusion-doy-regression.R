@@ -191,7 +191,7 @@ p_mu <-
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
-              alpha = 0.3) +
+              alpha = 0.5) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -209,7 +209,7 @@ p_s <-
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
-                  fill = site), alpha = 0.3) +
+                  fill = site), alpha = 0.5) +
   geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -274,7 +274,7 @@ p_mu_y <-
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
-              alpha = 0.3) +
+              alpha = 0.5) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -292,7 +292,7 @@ p_s_y <-
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
-                  fill = site), alpha = 0.3) +
+                  fill = site), alpha = 0.5) +
   geom_line(aes(date, sqrt(s2), color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
