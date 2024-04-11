@@ -2,6 +2,8 @@ library('dplyr')     # for data wrangling
 library('purrr')     # for functional programming
 library('lubridate') # for working with data
 library('ctmm')      # for movement modeling
+library('ggplot2')   # for fancy plots
+source('analysis/figures/default-theme.R')
 
 # find names of moving window files
 files <- list.files(path = 'data',
@@ -108,8 +110,21 @@ d %>%
   group_by(study_site, study_year) %>%
   summarize(prop = mean(has_fawn))
 
-hist(yday(d$date)) # data is not continuous throughout the year
-hist(d$days_since_aug_1) # with days since August 1
+
+cowplot::plot_grid(
+  ggplot() +
+    geom_histogram(aes(yday(date)), d, fill = 'grey', color = 'black',
+                   center = 5, binwidth = 10) +
+    labs(x = 'Day of year', y = 'Count'),
+  ggplot() +
+    geom_histogram(aes(days_since_aug_1), d, fill = 'grey', color = 'black',
+                   center = 5, binwidth = 10) +
+    labs(x = 'Days since August first', y = 'Count') +
+    xlim(c(0, 370)),
+  ncol = 1)
+
+ggsave('figures/yday-days-since-august-first-hist.png',
+       width = 6, height = 6, dpi = 600, bg = 'white')
 
 # save the final dataset ----
 saveRDS(object = d, file = 'data/years-1-and-2-data-akde.rds')
