@@ -218,7 +218,7 @@ p_mu <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('Mean 7-day space-use requirements'~(km^2)))) +
+  ylab(expression(bold('Mean space-use requirements'~(km^2)))) +
   theme(legend.position = 'top'); p_mu
 
 ggsave('figures/hr-mean.png',
@@ -236,7 +236,7 @@ p_s <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('SD in 7-day space-use requirements'~(km^2)))) +
+  ylab(expression(bold('SD in space-use requirements'~(km^2)))) +
   theme(legend.position = 'top'); p_s
 
 ggsave('figures/hr-sd.png',
@@ -301,7 +301,7 @@ p_mu_y <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('Mean 7-day space-use requirements'~(km^2)))) +
+  ylab(expression(bold('Mean space-use requirements'~(km^2)))) +
   theme(legend.position = 'top'); p_mu_y
 
 ggsave('figures/hr-mean-years.png',
@@ -319,7 +319,7 @@ p_s_y <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('SD in 7-day space-use requirements'~(km^2)))) +
+  ylab(expression(bold('SD in space-use requirements'~(km^2)))) +
   theme(legend.position = 'top'); p_s_y
 
 ggsave('figures/hr-sd-years.png',
