@@ -30,7 +30,7 @@ p_speed <-
   geom_vline(xintercept = REF_DATES, col = 'red') +
   geom_line() +
   labs(x = NULL,
-       y = expression(bold('Estimated weekly speed'~(km/day))))
+       y = expression(bold('Estimated speed'~(km/day))))
 p_speed
 
 ggsave('figures/speed-estimates.png', p_speed, width = 8,
