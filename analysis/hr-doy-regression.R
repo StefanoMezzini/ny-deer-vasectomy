@@ -12,6 +12,24 @@ source('analysis/figures/default-theme.R')
 d <- readRDS('data/years-1-and-2-data-no-akde.rds') %>%
   mutate(dof_area = map_dbl(model, ctmm:::DOF.area))
 
+# figure of HRs and ESS before filtering
+d %>%
+  mutate(sex = if_else(sex == 'f', 'Female', 'Male'),
+         study_site = if_else(study_site == 'rockefeller',
+                              'Rockefeller', 'Staten Island')) %>%
+  ggplot(aes(dof_area, hr_est_95)) +
+  facet_grid(study_site ~ sex) +
+  geom_hline(yintercept = 10, color = 'grey') +
+  geom_point(alpha = 0.2) +
+  xlab('Estimated number of range crossings') +
+  scale_y_log10(expression(bold(paste('Estimated 7-day space use (k',
+                                      m^2,', ', log[10], ' axis)'))),
+                breaks = c(1e-4, 1e-2, 1, 100),
+                labels = c('0.0001', '0.01', '1', '100'))
+
+ggsave('figures/hr-ess-relationship.png', width = 12, height = 6,
+       units = 'in', dpi = 600, bg = 'white')
+
 # HR estimates with an ESS < 3 are likely biased
 hist(d$dof_area, breaks = 100)
 quantile(d$dof_area, probs = c(0, 0.01, 0.02, 0.05))
