@@ -3,13 +3,40 @@ library('tidyr')     # for data wrangling
 library('purrr')     # for functional programming
 library('mgcv')      # for modeling
 library('lubridate') # for working with dates
-library('ggplot2')    # for fancy plots
+library('ggplot2')   # for fancy plots
 library('gratia')    # for predicting from models
+library('ctmm')      # for movement models
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 source('analysis/figures/default-theme.R')
 
-d <- readRDS('data/years-1-and-2-data-no-akde.rds') %>%
+d <- readRDS('data/years-1-and-2-data-no-akde.rds')
+
+# most windows with a non-resolved diffusion have 1 sample per hour 
+d_int <- d %>%
+  filter(is.na(diffusion_est)) %>%
+  transmute(interval = map(tel, \(.tel) {
+    median(diff(.tel$timestamp), na.rm = TRUE)
+  }),
+  interval = map_dbl(interval, \(int) {
+    units <- case_when(attr(int, 'units') == 'mins' ~ 'minutes',
+                       attr(int, 'units') == 'secs' ~ 'seconds',
+                       TRUE ~ attr(int, 'units'))
+    
+    'hours' %#% as.numeric(int) %#% units
+  }))
+
+ggplot(d_int, aes(interval)) + 
+  geom_histogram(center = 0, bins = 50) +
+  scale_x_continuous(trans = 'sqrt', breaks = c(0, 1, 10, 20, 30, 40, 50)) +
+  scale_y_continuous(trans = 'sqrt') +
+  labs(x = 'Sampling interval (hours; sqrt axis)', y = 'Count (sqrt axis)')
+
+mean(d_int$interval > 2)
+mean(d_int$interval > 1.05)
+
+# drop rows with NA diffusion
+d <- d %>%
   filter(! is.na(diffusion_est)) %>% # 67 NA values
   mutate(dof_diffusion = map_dbl(model, \(.m) summary(.m)$DOF['diffusion']))
 
