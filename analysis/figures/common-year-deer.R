@@ -62,4 +62,4 @@ p <-
           labels = c('', 'A', 'B', 'C'))
 
 ggsave('figures/twice-collared-deer-movement-data.png', p,
-       width = 16, height = 12, units = 'in', dpi = 600, bg = 'white')
+       width = 16, height = 16, units = 'in', dpi = 600, bg = 'white')
