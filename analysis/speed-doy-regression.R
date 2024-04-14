@@ -3,14 +3,40 @@ library('tidyr')     # for data wrangling
 library('purrr')     # for functional programming
 library('mgcv')      # for modeling
 library('lubridate') # for working with dates
-library('ggplot2')    # for fancy plots
+library('ggplot2')   # for fancy plots
 library('gratia')    # for predicting from models
-library('ctmm')  # for movement modeling
+library('ctmm')      # for movement modeling
+library('coda')      # for effective sample size for the M-H sampler
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 source('analysis/figures/default-theme.R')
 
-d <- readRDS('data/years-1-and-2-data-no-akde.rds') %>%
+d <- readRDS('data/years-1-and-2-data-no-akde.rds')
+
+# most windows with a non-resolved speed have 1 sample per hour 
+d_int <- d %>%
+  filter(! is.finite(speed_est)) %>%
+  transmute(interval = map(tel, \(.tel) {
+    median(diff(.tel$timestamp), na.rm = TRUE)
+  }),
+  interval = map_dbl(interval, \(int) {
+    units <- case_when(attr(int, 'units') == 'mins' ~ 'minutes',
+                       attr(int, 'units') == 'secs' ~ 'seconds',
+                       TRUE ~ attr(int, 'units'))
+    
+    'hours' %#% as.numeric(int) %#% units
+  }))
+
+mean(d_int$interval > 1.1)
+
+ggplot(d_int, aes(interval)) + 
+  geom_histogram(center = 0) +
+  scale_x_continuous(trans = 'sqrt', breaks = c(0, 1, 10, 20, 30, 40, 50)) +
+  scale_y_continuous(trans = 'sqrt') +
+  labs(x = 'Sampling interval (hours; sqrt axis)', y = 'Count (sqrt axis)')
+
+# drop rows with NA or infinite speed
+d <- d %>%
   filter(is.finite(speed_est)) %>% # loosing ~40% of the windows
   mutate(dof_speed = map_dbl(model, ctmm:::DOF.speed))
 
@@ -93,6 +119,7 @@ d %>%
   ggplot() +
   facet_grid(treatment ~ sex) +
   geom_point(aes(fitted, speed_est, color = large, alpha = large)) +
+  geom_abline(slope = 1, intercept = 0, color = 'grey') +
   labs(x = 'Fitted values', y = 'Observed values') +
   scale_color_manual('Deviance residuals > 3', values = 1:2) +
   scale_alpha_manual('Deviance residuals > 3', values = c(0.3, 1)) +
@@ -277,3 +304,4 @@ p_s_y <-
 
 ggsave('figures/speed-sd-years.png',
        p_s_y, width = 16, height = 8, dpi = 600, bg = 'white')
+
