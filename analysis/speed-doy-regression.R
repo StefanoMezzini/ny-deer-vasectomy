@@ -6,7 +6,6 @@ library('lubridate') # for working with dates
 library('ggplot2')   # for fancy plots
 library('gratia')    # for predicting from models
 library('ctmm')      # for movement modeling
-library('coda')      # for effective sample size for the M-H sampler
 source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 source('analysis/figures/default-theme.R')
