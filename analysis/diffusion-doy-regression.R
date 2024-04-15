@@ -117,6 +117,7 @@ mutate(d,
   ggplot() +
   facet_grid(treatment ~ sex) +
   geom_point(aes(fitted, diffusion_est, color = large, alpha = large)) +
+  geom_abline(slope = 1, intercept = 0, color = 'grey') +
   labs(x = 'Fitted values', y = 'Observed values') +
   scale_color_manual('Deviance residuals > 3', values = 1:2) +
   scale_alpha_manual('Deviance residuals > 3', values = c(0.3, 1)) +
