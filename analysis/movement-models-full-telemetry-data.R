@@ -4,15 +4,13 @@ library('tidyr') # for data wrangling
 library('purrr') # for functional programming
 library('furrr') # for parallel computing
 
-# import collar error calibration model
-deer_uere <- readRDS('models/calibration.error.model.inventa_no_class.rds')
-
 # set up parallel computation plan (separate R sessions)
 CORES <- availableCores(logical = FALSE) - 1
 plan(multisession, workers = CORES)
 plan() # check plan
 
 # fit movement models ----
+# calibrated tels took too long (one was not done fitting after a month)
 d <-
   bind_rows(read.csv('data/Year_1_processed_data.csv'),
             read.csv('data/Year_2_processed_data.csv')) %>%
@@ -23,15 +21,13 @@ d <-
                  animal.sex, animal.age)) %>% # create col of tel
   mutate(
     tel = map(tel, \(.tel) {
-      as.telemetry(.tel, mark.rm = TRUE) %>% # outliers removed manually
-        `uere<-`(deer_uere) %>% # calibrate movement model error))
-        return()
+      # outliers already removed manually earlier
+      as.telemetry(.tel, mark.rm = TRUE)
     }),
     models = future_map(tel, \(.tel) {
       tibble(
         # find initial guesses for models (assuming calibrated error)
-        guess = ctmm.guess(data = .tel, interactive = FALSE,
-                           CTMM = ctmm(error = TRUE)) %>% # for calibration
+        guess = ctmm.guess(data = .tel, interactive = FALSE) %>%
           list(),
         # select best movement model based on subset of .tel
         model = ctmm.select(data = .tel, CTMM = guess[[1]]) %>%
