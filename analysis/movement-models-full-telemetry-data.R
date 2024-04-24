@@ -41,11 +41,6 @@ d <-
         akde = akde(data = .tel, CTMM = model[[1]],
                     weights = TRUE) %>% # weights using sampling frequency
           list(),
-        # calculate estimated average density at each location 
-        tel = map2(tel, akde, \(.tel, .akde) {
-          .r <- raster(.akde, DF = 'PDF')
-          .tel$density <- raster::extract(.r, SpatialPoints.telemetry(.tel))
-        }),
         # find home range estimate
         hr_est_95 = extract_hr(.ud = akde[[1]], par='est', l.ud=0.95),
         # # find degrees of freedom
@@ -54,14 +49,21 @@ d <-
         dof_speed = ctmm:::DOF.speed(model[[1]]))
     }, .progress = TRUE, .options = furrr_options(seed = TRUE))) %>%
   tidyr::unnest(models) %>%
-  mutate(mean_diffusion = map_dbl(model, \(.m) { # find diffusion estimates
-    if(any(grepl('diffusion',
-                 rownames(summary(.m)$CI)))) {
-      return(summary(.m, units = FALSE)$
-               CI['diffusion (square meters/second)', 'est'])
-    } else {
-      return(NA_real_)
-    }}),
+  mutate(
+    # calculate estimated average density at each location 
+    tel = map2(tel, akde, \(.tel, .akde) {
+      .r <- raster(.akde, DF = 'CDF')
+      .tel$density <- raster::extract(.r, SpatialPoints.telemetry(.tel))
+      return(.tel)
+    }),
+    mean_diffusion = map_dbl(model, \(.m) { # find diffusion estimates
+      if(any(grepl('diffusion',
+                   rownames(summary(.m)$CI)))) {
+        return(summary(.m, units = FALSE)$
+                 CI['diffusion (square meters/second)', 'est'])
+      } else {
+        return(NA_real_)
+      }}),
     # find speed
     mean_speed = map_dbl(model, \(.m) {
       if(any(grepl('speed',
@@ -82,4 +84,5 @@ d <-
     mean_speed = units_speed %#% mean_speed)
 
 # save movement models ----
-saveRDS(d, 'models/full-telemetry-movement-models.rds')
+saveRDS(d, paste0('models/full-telemetry-movement-models-',
+                  Sys.Date(), '.rds'))
