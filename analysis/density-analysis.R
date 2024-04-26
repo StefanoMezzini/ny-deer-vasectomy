@@ -4,7 +4,8 @@ library('purrr')     # for functional programming
 library('lubridate') # for working with dates
 library('ggplot2')   # for fancy plots
 library('mgcv')      # for modeling
-source('../ndvi-stochasticity/functions/betals.r')
+source('analysis/ref_dates.R')
+source('analysis/figures/default-theme.R')
 
 # polys <- map(x$akde[-c(17, 47, 61, 73, 85)],
 #              \(.x) SpatialPolygonsDataFrame.UD(.x) %>%
@@ -35,7 +36,8 @@ d <-
                      sex_treatment, has_fawn) %>%
               ungroup(),
             by = 'animal') %>%
-  mutate(animal = factor(animal)) %>%
+  mutate(animal = factor(animal),
+         animal_year = factor(paste(animal, study_year))) %>%
   unnest(tel) %>%
   as_tibble() %>%
   mutate(days_since_aug_1 =
@@ -50,29 +52,29 @@ d <-
 
 d
 
-hist(d$density)
-
-hist(d$hr_est_95)
+# density is much more constrained than the HR estimates
+layout(t(1:2))
+hist(d$density, breaks = 50)
+hist(d$hr_est_95, breaks = 50)
+layout(1)
 quantile(d$hr_est_95, probs = c(0.5, 0.95, 0.97, 0.98, 0.99, 1))
 
 d %>%
   group_by(animal) %>%
-  mutate(density = density / mean(density)) %>%
+  mutate(density = density) %>%
   ungroup() %>%
   ggplot() +
-  facet_wrap(sex ~ study_site) +
+  facet_grid(sex ~ study_site) +
   geom_smooth(aes(days_since_aug_1, density))
 
+# fit the model ----
 # 40 minutes with s(by=s_t) + s(s_t, year), s(animal)
-
-d$animal_year <- factor(paste(d$animal, d$study_year))
-
 # takes ~ 10 seconds
 # study_year smooth widens CIs substantially
-m <- bam(
+m_density <- bam(
   density ~
-    s(days_since_aug_1, by = sex_treatment, k = 10) +
-    # s(days_since_aug_1, study_year, by = sex_treatment, bs = 'fs', k = 10) +
+    s(days_since_aug_1, by = sex_treatment, k = 15) +
+    s(days_since_aug_1, study_year, by = sex_treatment, bs = 'sz', k = 15) +
     s(animal, bs = 're'),
   family = betar(link = 'logit'), # since CDF is in (0, 1)
   data = d,
@@ -80,32 +82,116 @@ m <- bam(
   discrete = TRUE,
   control = gam.control(trace = TRUE))
 
-# m <- bam(
-#   density ~
-#     s(days_since_aug_1, by = sex_treatment, k = 10) +
-#     s(days_since_aug_1, animal_year, bs = 'fs', k = 10),
-#   family = betar(link = 'logit'), # since CDF is in (0, 1)
-#   data = d,
-#   method = 'fREML',
-#   discrete = TRUE,
-#   control = gam.control(trace = TRUE))
+summary(m_density) # good deviance explained
+plot(m_density, pages = 1, scheme = 0)
 
-summary(m)
-plot(m, pages = 1, scheme = 1)
-
+# model diagnostics ----
+# residuals are not Gaussian: need to use the MH sampler
 layout(matrix(1:4, ncol = 2))
-gam.check(m, type = 'pearson')
-abline(a = 0, b = 1, col = 'red3')
+gam.check(m_density, type = 'pearson')
 layout(1)
 
 # all four groups have a long right tail
-ggplot(mutate(d, e = resid(m, type = 'pearson'))) +
+ggplot(mutate(d, e = resid(m_density, type = 'pearson'))) +
   facet_grid(sex ~ study_site, scales = 'free') +
-  geom_density(aes(e), fill = 'grey') +
-  geom_vline(xintercept = 0, color = 'grey20')
+  geom_density(aes(e, fill = study_year, color = study_year), alpha = 0.4) +
+  geom_vline(xintercept = 0, color = 'grey20') +
+  scale_fill_brewer('Study year', type = 'qual', palette = 6,
+                    aesthetics = c('fill', 'color'))
 
 # no problematic trends in the residuals over time
-ggplot(mutate(d, e = resid(m, type = 'pearson'))) +
-  facet_grid(sex ~ study_site, scales = 'free') +
-  geom_point(aes(days_since_aug_1, e)) +
+ggplot(mutate(d, e = resid(m_density, type = 'pearson'))) +
+  facet_grid(sex ~ study_site + study_year, scales = 'free') +
+  geom_point(aes(days_since_aug_1, e), alpha = 0.2) +
   geom_smooth(aes(days_since_aug_1, e))
+
+# create figures ----
+newd <-
+  expand.grid(date = seq(as.Date('2021-09-01'),
+                         as.Date('2022-05-30'),
+                         length.out = 400),
+              sex_treatment = unique(d$sex_treatment),
+              study_year = 'new year',
+              animal = 'new animal') %>%
+  mutate(days_since_aug_1 = if_else(
+    # if in Aug, Sept, Oct, Nov, or Dec
+    month(date) >= 8,
+    # then calculate days since Aug 1
+    date - as.Date(paste0(year(date), '-08-01')),
+    # otherwise calculate days since Aug 1 of previous year 
+    date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
+      as.numeric(),
+    sex = substr(sex_treatment, 1, 1),
+    site = substr(sex_treatment, 3,
+                  nchar(as.character(sex_treatment))))
+
+preds <- bind_cols(
+  newd,
+  predict(m_density, newdata = newd, unconditional = FALSE, se.fit = TRUE,
+          discrete = FALSE,
+          exclude = paste0('s(days_since_aug_1,study_year):sex_treatment',
+                           c('f rockefeller', 'f staten_island',
+                             'm rockefeller', 'm staten_island'))) %>%
+  as.data.frame()) %>%
+  mutate(lwr_95 = m_density$family$linkinv(fit - se.fit * 1.96),
+         mu = m_density$family$linkinv(fit),
+         upr_95 = m_density$family$linkinv(fit + se.fit * 1.96),
+         sex = case_when(sex == 'f' ~ 'Female',
+                         sex == 'm' ~ 'Male'),
+         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                          site == 'staten_island' ~ 'Staten Island'))
+
+preds_y <-
+  bind_rows(mutate(newd, study_year = 1),
+            mutate(newd, study_year = 2)) %>%
+  bind_cols(
+    .,
+    predict(m_density, newdata = ., unconditional = FALSE, se.fit = TRUE,
+            discrete = FALSE) %>%
+      as.data.frame()) %>%
+  mutate(lwr_95 = m_density$family$linkinv(fit - se.fit * 1.96),
+         mu = m_density$family$linkinv(fit),
+         upr_95 = m_density$family$linkinv(fit + se.fit * 1.96),
+         sex = case_when(sex == 'f' ~ 'Female',
+                         sex == 'm' ~ 'Male'),
+         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                          site == 'staten_island' ~ 'Staten Island'))
+
+# create the figures ----
+DATES <- as.Date(c('2021-09-15', '2021-11-15', '2022-01-15', '2022-03-15',
+                   '2022-05-15'))
+LABS <- format(DATES, '%B 15')
+
+p_mu <-
+  ggplot(preds, aes(group = sex_treatment)) +
+  facet_grid(sex ~ .) +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
+  geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
+              alpha = 0.5) +
+  geom_line(aes(date, mu, color = site), lwd = 1) +
+  scale_color_brewer('Site', type = 'qual', palette = 1,
+                     aesthetics = c('color', 'fill')) +
+  scale_linetype('Site') +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  ylab('Mean daily density') +
+  theme(legend.position = 'top'); p_mu
+
+ggsave('figures/density-mean.png', p_mu, width = 8, height = 8, dpi = 600,
+       bg = 'white')
+
+p_mu_y <-
+  ggplot(preds_y, aes(group = sex_treatment)) +
+  facet_grid(sex ~ study_year) +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
+  geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
+              alpha = 0.5) +
+  geom_line(aes(date, mu, color = site), lwd = 1) +
+  scale_color_brewer('Site', type = 'qual', palette = 1,
+                     aesthetics = c('color', 'fill')) +
+  scale_linetype('Site') +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  ylab('Mean daily density') +
+  theme(legend.position = 'top'); p_mu_y
+
+ggsave('figures/density-mean-years.png', p_mu_y, width = 8, height = 8,
+       dpi = 600, bg = 'white')
