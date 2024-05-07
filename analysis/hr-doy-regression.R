@@ -131,6 +131,29 @@ if(FALSE) {
 
 summary(m_hr)
 
+# no clear trends in the residuals over time
+d <- mutate(d,
+            sex_treatment = as.character(sex_treatment),
+            site = if_else(substr(sex_treatment, 3, 100) == 'staten_island',
+                           'Staten Island',
+                           'Rockefeller State Park Preserve'),
+            e = resid(m_hr)) %>%
+  as_tibble()
+
+cowplot::plot_grid(
+  ggplot(d, aes(days_since_aug_1, e)) +
+    facet_grid(sex ~ site) +
+    geom_point(alpha = 0.2) +
+    geom_smooth(method = 'gam', formula = y ~ s(x)) +
+    labs(x = expression(bold(Days~since~August~1^'st')),
+         y = 'Deviance residuals'),
+  ggplot(d, aes(days_since_aug_1, e^2)) +
+    facet_grid(sex ~ site) +
+    geom_point(alpha = 0.2) +
+    geom_smooth(method = 'gam', formula = y ~ s(x)) +
+    labs(x = expression(bold(Days~since~August~1^'st')),
+         y = 'Squared deviance residuals'))
+
 # check what groups cause oddly large outliers
 d %>%
   mutate(sex = if_else(sex == 'f', 'Females', 'Males'),
