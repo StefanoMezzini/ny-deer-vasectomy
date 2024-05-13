@@ -6,9 +6,10 @@ library('lubridate') # for working with dates
 library('ggplot2')   # for fancy plots
 library('gratia')    # for predicting from models
 library('ctmm')      # for movement modeling
-source('functions/gammals-variance-simulation-cis.R')
-source('analysis/ref_dates.R')
-source('analysis/figures/default-theme.R')
+source('functions/gammals-variance-simulation-cis.R') # for gammals CIs 
+source('analysis/ref_dates.R') # estimated start and end of estrous
+source('analysis/figures/default-theme.R') # for a common ggplot theme
+source('functions/predict_mh.R') # for predicting with Metropolis-Hastings
 
 d <- readRDS('data/years-1-and-2-data-no-akde.rds')
 
@@ -77,6 +78,7 @@ if(FALSE) {
   m_speed <- gam(formula = list(
     # linear predictor for the mean
     speed_est ~
+      0 + sex_treatment +
       # temporal sex- and treatment-level trends with different
       s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
       # accounts for differences in trends between years
@@ -87,7 +89,9 @@ if(FALSE) {
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
-    ~ s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+    ~
+      0 + sex_treatment +
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
       # accounts for differences between individuals
       s(animal, bs = 're')),
     
@@ -96,15 +100,13 @@ if(FALSE) {
     method = 'REML',
     control = gam.control(trace = TRUE))
   
-  appraise(m_speed, method = 'simulate', n_bins = 30, point_alpha = 0.1)
-  #' `gratia::draw()` can't currently plot sz smooths
-  plot(m_speed, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0),
-       scale = 0)
   saveRDS(m_speed, paste0('models/m_speed-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_speed <- readRDS('models/m_speed-hgamls-2024-04-10.rds')
+  m_speed <- readRDS('models/m_speed-hgamls-2024-05-12.rds')
 }
 
+appraise(m_speed, method = 'simulate', n_bins = 30, point_alpha = 0.1)
+plot(m_speed, pages = 1, scale = 0)
 summary(m_speed)
 
 # check what groups cause oddly large outliers
@@ -127,6 +129,18 @@ d %>%
 ggsave('figures/speed-model-obs-fitted.png', width = 8, height = 8,
        dpi = 600, bg = 'white')
 
+# check if there are any trends over time
+d %>%
+  filter(! is.na(speed_est)) %>%
+  ungroup() %>%
+  mutate(sex = if_else(sex == 'f', 'Females', 'Males'),
+         treatment = if_else(study_site == 'rockefeller', 'Rockefeller',
+                             'Staten Island'),
+         e_d = resid(m_speed, type = 'deviance')) %>%
+  ggplot() +
+  facet_grid(treatment ~ sex) +
+  geom_point(aes(days_since_aug_1, e_d))
+
 # plot the estimated trends common between the two years ----
 newd <-
   expand.grid(date = seq(as.Date('2021-09-01'),
@@ -134,8 +148,7 @@ newd <-
                          length.out = 400),
               sex_treatment = unique(d$sex_treatment),
               study_year = 'new year',
-              animal = 'new animal',
-              s_t_y = 'new s_t_y') %>%
+              animal_year = 'new animal') %>%
   mutate(days_since_aug_1 = if_else(
     # if in Aug, Sept, Oct, Nov, or Dec
     month(date) >= 8,
@@ -228,7 +241,7 @@ newd_years <-
                          length.out = 400),
               sex_treatment = unique(d$sex_treatment),
               study_year = 1:2,
-              animal = 'new animal') %>%
+              animal_year = 'new animal') %>%
   mutate(s_t_y = paste(sex_treatment, study_year),
          days_since_aug_1 = if_else(
            # if in Aug, Sept, Oct, Nov, or Dec
@@ -303,4 +316,3 @@ p_s_y <-
 
 ggsave('figures/speed-sd-years.png',
        p_s_y, width = 16, height = 8, dpi = 600, bg = 'white')
-

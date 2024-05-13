@@ -4,16 +4,10 @@ library('purrr')     # for functional programming
 library('lubridate') # for working with dates
 library('ggplot2')   # for fancy plots
 library('mgcv')      # for modeling
+library('gratia')    # for ggplot-based diagnostics
 source('analysis/ref_dates.R')
 source('analysis/figures/default-theme.R')
-
-# polys <- map(x$akde[-c(17, 47, 61, 73, 85)],
-#              \(.x) SpatialPolygonsDataFrame.UD(.x) %>%
-#                st_as_sf() %>%
-#                st_transform('EPSG:4326') %>%
-#                st_union() %>%
-#                st_as_sf()) %>%
-#   bind_rows()
+source('../Directed-Study/functions/betals.r')
 
 d <-
   readRDS('models/full-telemetry-movement-models-2024-04-20.rds') %>%
@@ -59,39 +53,72 @@ hist(d$hr_est_95, breaks = 50)
 layout(1)
 quantile(d$hr_est_95, probs = c(0.5, 0.95, 0.97, 0.98, 0.99, 1))
 
-d %>%
-  group_by(animal) %>%
-  mutate(density = density) %>%
-  ungroup() %>%
-  ggplot() +
+ggplot(d) +
   facet_grid(sex ~ study_site) +
   geom_smooth(aes(days_since_aug_1, density))
+
+ggplot(d) +
+  facet_grid(sex ~ study_site + study_year) +
+  geom_line(aes(days_since_aug_1, density, group = animal_year), alpha = 0.1)
 
 # fit the model ----
 # 40 minutes with s(by=s_t) + s(s_t, year), s(animal)
 # takes ~ 10 seconds
 # study_year smooth widens CIs substantially
-m_density <- bam(
-  density ~
-    s(days_since_aug_1, by = sex_treatment, k = 15) +
-    s(days_since_aug_1, study_year, by = sex_treatment, bs = 'sz', k = 15) +
-    s(animal, bs = 're'),
-  family = betar(link = 'logit'), # since CDF is in (0, 1)
-  data = d,
-  method = 'fREML',
-  discrete = TRUE,
-  control = gam.control(trace = TRUE))
+# fits in ~ 35 minutes
+if(file.exists('models/m_density-hgam-2024-05-07.rds')) {
+  m_density <- readRDS('models/m_density-hgam-2024-05-07.rds')
+} else {
+  m_density <- bam(
+    density ~
+      0 + sex_treatment +
+      s(days_since_aug_1, by = sex_treatment, k = 15) +
+      s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'fs') +
+      s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
+        xt = list(bs = 'cr')),
+    family = betar(link = 'logit'), # since CDF is in (0, 1)
+    data = d,
+    method = 'fREML',
+    discrete = TRUE,
+    control = gam.control(trace = TRUE))
+  saveRDS(m_density, paste0('models/m_density-hgam-', Sys.Date(), '.rds'))
+  
+  m_density <- gam(formula = list(
+    # linear predictor for the mean
+    density ~
+      0 + sex_treatment +
+      # temporal sex- and treatment-level trends with different
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+      # accounts for differences in trends between years
+      s(days_since_aug_1, by = sex_treatment, study_year, k = 15, bs = 'sz') +
+      # accounts for differences between individuals
+      s(animal, bs = 're'),
+    
+    # linear predictor for the scale (sigma2 = mu^2 * scale)
+    # allows mean-variance relationship to be different between sexes
+    # sex- and treatment-level trends over season
+    ~ 0 + sex_treatment +
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+      # accounts for differences between individuals
+      s(animal, bs = 're')),
+    
+    family = gammals(),
+    data = d,
+    method = 'REML',
+    control = gam.control(trace = TRUE))
+}
 
-summary(m_density) # good deviance explained
+appraise(m_density, point_alpha = 0.05, type = 'pearson')
 plot(m_density, pages = 1, scheme = 0)
+summary(m_density, re.test = FALSE) # good deviance explained
 
-# model diagnostics ----
-# residuals are not Gaussian: need to use the MH sampler
-layout(matrix(1:4, ncol = 2))
-gam.check(m_density, type = 'pearson')
-layout(1)
+mutate(d,
+       e = resid(m_density)) %>%
+  ggplot(aes(days_since_aug_1, e, group = animal)) +
+  facet_wrap(study_site ~ sex + study_year) +
+  geom_line(alpha = 0.1)
 
-# all four groups have a long right tail
+# residuals by group look good
 ggplot(mutate(d, e = resid(m_density, type = 'pearson'))) +
   facet_grid(sex ~ study_site, scales = 'free') +
   geom_density(aes(e, fill = study_year, color = study_year), alpha = 0.4) +
@@ -111,8 +138,8 @@ newd <-
                          as.Date('2022-05-30'),
                          length.out = 400),
               sex_treatment = unique(d$sex_treatment),
-              study_year = 'new year',
-              animal = 'new animal') %>%
+              study_year = 'null',
+              animal_year = 'null') %>%
   mutate(days_since_aug_1 = if_else(
     # if in Aug, Sept, Oct, Nov, or Dec
     month(date) >= 8,
@@ -129,10 +156,10 @@ preds <- bind_cols(
   newd,
   predict(m_density, newdata = newd, unconditional = FALSE, se.fit = TRUE,
           discrete = FALSE,
-          exclude = paste0('s(days_since_aug_1,study_year):sex_treatment',
-                           c('f rockefeller', 'f staten_island',
-                             'm rockefeller', 'm staten_island'))) %>%
-  as.data.frame()) %>%
+          exclude = c('s(days_since_aug_1,animal_year)',
+                      paste0('s(days_since_aug_1,study_year):sex_treatment',
+                             unique(d$sex_treatment)))) %>%
+    as.data.frame()) %>%
   mutate(lwr_95 = m_density$family$linkinv(fit - se.fit * 1.96),
          mu = m_density$family$linkinv(fit),
          upr_95 = m_density$family$linkinv(fit + se.fit * 1.96),
@@ -147,7 +174,8 @@ preds_y <-
   bind_cols(
     .,
     predict(m_density, newdata = ., unconditional = FALSE, se.fit = TRUE,
-            discrete = FALSE) %>%
+            discrete = FALSE,
+            exclude = c('s(days_since_aug_1,animal_year)')) %>%
       as.data.frame()) %>%
   mutate(lwr_95 = m_density$family$linkinv(fit - se.fit * 1.96),
          mu = m_density$family$linkinv(fit),
@@ -167,7 +195,7 @@ p_mu <-
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
-              alpha = 0.5) +
+              alpha = 0.3) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -184,7 +212,7 @@ p_mu_y <-
   facet_grid(sex ~ study_year) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
-              alpha = 0.5) +
+              alpha = 0.3) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +

@@ -64,47 +64,82 @@ p_diffusion
 ggsave('figures/diffusion-estimates.png', p_diffusion, width = 8,
        height = 8, dpi = 600, bg = 'white')
 
-# fit a Hierarchical Generalized Additive Model for Location and Scale ----
+# fit a Hierarchical Generalized Additive Model ----
 # not using cyclic cubic splines because the gap is too big
 # for year 1 the gap is even bigger
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
-if(FALSE) {
-  m_diffusion <- gam(formula = list(
-    # linear predictor for the mean
+if(file.exists('models/m_diffusion-hgam-2024-05-13.rds')) {
+  m_diffusion <- readRDS('models/m_diffusion-hgam-2024-05-13.rds')
+} else {
+  # no clear temporal trends
+  ggplot(d, aes(days_since_aug_1, diffusion_est, group = animal_year)) +
+    facet_wrap(~ sex_treatment, scales = 'free') +
+    geom_line(alpha = 0.3)
+  
+  # fits in ~ 2 minutes
+  m_diffusion <- bam(
     diffusion_est ~
-      # temporal sex- and treatment-level trends with different smoothness
-      #' using different smoothness for each `sex_treatment` and high `k`
-      #' because females have cyclical estrous periods, while males do not
+      0 + sex_treatment +
+      # average trends for each group
       s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
-      # accounts for deviation from average between years
-      #' keeping `by = sex_treatment` and high `k` to account for full
-      #' differences between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 15, bs = 'sz') +
-      # accounts for differences between individuals
-      s(animal, bs = 're'),
-    
-    # linear predictor for the scale (sigma2 = mu^2 * scale)
-    # allows mean-variance relationship to be different between sexes
-    # sex- and treatment-level trends over season
-    # using a by smooth does not improve the model
-    ~ s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
-      # accounts for differences between individuals
-      s(animal, bs = 're')),
-    
+      # average year-level deviations from the average for each group
+      s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'sz') +
+      # invidual- and year-level deviations from the average
+      s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
+        xt = list(bs = 'cr')),
+    family = Gamma(link = 'log'),
+    data = d,
+    method = 'fREML',
+    discrete = TRUE,
+    control = gam.control(trace = TRUE))
+  
+  appraise(m_diffusion, point_alpha = 0.05, n_bins = 30)
+  plot(m_diffusion, pages = 1, scale = 0)
+  summary(m_diffusion, re.test = FALSE)
+  saveRDS(m_diffusion,
+          paste0('models/m_diffusion-hgam-', Sys.Date(), '.rds'))
+  
+  #' *need location-scale model*
+  mutate(d, e = resid(m_diffusion)) %>%
+    group_by(sex_treatment) %>%
+    summarize(mean = mean(e), sd = sd(e))
+  
+  mutate(d, e = resid(m_diffusion)) %>%
+    ggplot() +
+    facet_wrap(~ sex_treatment, scales = 'free_y') +
+    geom_histogram(aes(e))
+  
+  # setup takes ~15-20 minutes
+  # fits in ~ 
+  m_diffusion <- gam(list(
+    diffusion_est ~
+      0 + sex_treatment +
+      # average trends for each group
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+      # average year-level deviations from the average for each group
+      s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'sz') +
+      # invidual- and year-level deviations from the average
+      s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
+        xt = list(bs = 'cr')),
+    ~
+      0 + sex_treatment +
+      # average trends for each group
+      s(days_since_aug_1, by = sex_treatment, k = 5, bs = 'tp') +
+      # invidual- and year-level deviations from the average
+      s(animal_year, bs = 're')),
     family = gammals(),
     data = d,
     method = 'REML',
     control = gam.control(trace = TRUE))
   
   appraise(m_diffusion, point_alpha = 0.05, n_bins = 30)
-  #' `gratia::draw()` can't currently plot sz smooths
-  plot(m_diffusion, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0),
-       scale = 0)
-  saveRDS(m_diffusion, paste0('models/m_diffusion-hgamls-', Sys.Date(), '.rds'))
-} else {
-  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-04-10.rds')
+  plot(m_diffusion, pages = 1, scale = 0)
+  summary(m_diffusion, re.test = FALSE)
+  
+  saveRDS(m_diffusion,
+          paste0('models/m_diffusion-hgamls-', Sys.Date(), '.rds'))
 }
 
 # check what groups cause oddly large outliers

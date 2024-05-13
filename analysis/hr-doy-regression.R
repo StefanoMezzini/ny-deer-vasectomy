@@ -75,16 +75,83 @@ d %>%
   group_by(sex_treatment) %>%
   summarise(perc_outliers = round(mean(hr_est_95 > 10) * 100, 2))
 
-d <- filter(d, hr_est_95 < 10, dof_area >= 3)
-
-plot(map_dbl(d$model, ctmm:::DOF.area), d$hr_est_95)
+# estimates should be unbiased for DOF ~>= 3, if movement is homogeneous
+plot(hr_est_95 ~ dof_area, d)
 abline(v = 3, col = 'red')
+
+d <- filter(d, hr_est_95 < 10)
+
+# estimates look more reasonable
+plot(hr_est_95 ~ dof_area, d)
 
 # fit a Hierarchical Generalized Additive Model for Location and Scale ----
 # not using cyclic cubic splines because the gap is too big
 # for year 1 the gap is even bigger
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
+
+if(file.exists('models/m_hr-hgam-2024-05-12-poor-fit.rds')) {
+  m_hr <- readRDS('models/m_hr-hgam-2024-05-12-poor-fit.rds')
+} else {
+  # fits in ~ 1 minute
+  m_hr <- bam(
+    hr_est_95 ~
+      # by smooths require a separate explicit intercept for each group
+      0 + sex_treatment +
+      # average trends for each group
+      s(days_since_aug_1, by = sex_treatment, k = 10, bs = 'tp') +
+      # average year-level deviations from the average for each group
+      s(days_since_aug_1, study_year, by = sex_treatment, k = 10, bs = 'sz') +
+      # invidual- and year-level deviations from the average
+      s(days_since_aug_1, animal_year, k = 10, bs = 'fs',
+        xt = list(bs = 'cr')),
+    family = Gamma(link = 'log'),
+    data = d,
+    method = 'fREML',
+    discrete = TRUE,
+    control = gam.control(trace = TRUE)); beepr::beep()
+  
+  saveRDS(m_hr, paste0('models/m_hr-hgam-', Sys.Date(), '-poor-fit.rds'))
+}
+
+#' *need a location-scale model*
+appraise(m_hr, point_alpha = 0.3)
+plot(m_hr, pages = 1, scheme = 0, scale = 0)
+summary(m_hr, re.test = FALSE)
+
+d <- mutate(d, e_hgam = resid(m_hr))
+
+# differences in variance between groups
+d %>%
+  group_by(sex_treatment) %>%
+  summarise(mean = mean(e_hgam),
+            sd = sd(e_hgam))
+
+ggplot(d) +
+  facet_wrap(~ sex_treatment) +
+  geom_histogram(aes(e_hgam), fill = 'grey80', color = 'black')
+
+# over-dispersion in all groups
+ggplot(d) +
+  facet_wrap(~ sex_treatment) +
+  geom_qq(aes(sample = e_hgam), alpha = 0.2) +
+  geom_qq_line(aes(sample = e_hgam), color = 'red')
+
+# the overdispersion occurs due to these large, sudden excursions
+d %>%
+  group_by(sex_treatment) %>%
+  filter(animal_year == first(animal_year)) %>%
+  ggplot() +
+  facet_wrap(~ sex_treatment) +
+  geom_line(aes(days_since_aug_1, e_hgam, group = animal_year))
+
+# SI female trends would be different if we could account for excursions
+mutate(d,
+       excursion = e_hgam > 0.5) %>%
+  ggplot(aes(days_since_aug_1, e_hgam)) +
+  facet_wrap(~ sex_treatment + excursion) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = 'gam', formula = y ~ s(x, k = 10))
 
 if(FALSE) {
   # bs = 'tp', k = 15: dev.expl = 60.1%
@@ -95,43 +162,41 @@ if(FALSE) {
   m_hr <- gam(formula = list(
     # linear predictor for the mean
     hr_est_95 ~
+      # by smooths require a separate explicit intercept for each group
+      0 + sex_treatment +
       # temporal sex- and treatment-level trends with different smoothness
-      #' using different smoothness for each `sex_treatment` and high `k`
-      #' because females have cyclical estrous periods, while males do not
       #' `k = 30` gives excessive wiggliness after estrous period
-      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+      s(days_since_aug_1, by = sex_treatment, k = 10, bs = 'tp') +
       # accounts for deviation from average between years
-      #' keeping `by = sex_treatment` and high `k` to account for full
-      #' differences between years
-      s(days_since_aug_1, by = sex_treatment, study_year, k = 15, bs = 'sz') +
-      # accounts for differences between individuals
-      s(animal, bs = 're'),
+      s(days_since_aug_1, study_year, by = sex_treatment, k = 10, bs = 'sz') +
+      s(animal_year, bs = 're'),
+      # invidual- and year-level deviations from the average
+      # s(days_since_aug_1, animal_year, k = 10, bs = 'fs',
+        # xt = list(bs = 'cr')),
     
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
-    #' increasong `k` above 10 or using adaptive splines does not fix the
-    #' overdispersion
-    ~ s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
-      # accounts for differences between individuals
-      s(animal, bs = 're')),
+    ~ 0 + sex_treatment +
+      s(days_since_aug_1, by = sex_treatment, k = 5, bs = 'tp') +
+      s(animal_year, bs = 're')),
     
     family = gammals(),
     data = d,
     method = 'REML',
-    control = gam.control(trace = TRUE))
+    control = gam.control(trace = TRUE)); beepr::beep()
   
-  appraise(m_hr, point_alpha = 0.1, n_bins = 30)
-  #' `gratia::draw()` can't currently plot sz smooths
-  plot(m_hr, pages = 1, scheme = c(rep(1, 4), rep(0, 5), rep(1, 4), 0))
   saveRDS(m_hr, paste0('models/m_hr-hgamls-', Sys.Date(), '.rds'))
 } else {
-  m_hr <- readRDS('models/m_hr-hgamls-2024-04-11.rds')
+  m_hr <- readRDS('models/m_hr-hgamls-2024-05-12.rds')
 }
 
-summary(m_hr)
+# residuals are still overdispersed
+appraise(m_hr, point_alpha = 0.1, n_bins = 30)
+plot(m_hr, pages = 1, scheme = 0)
+summary(m_hr, re.test = FALSE)
 
-# no clear trends in the residuals over time
+# there are trends in the SI females' residuals
 d <- mutate(d,
             sex_treatment = as.character(sex_treatment),
             site = if_else(substr(sex_treatment, 3, 100) == 'staten_island',
@@ -189,14 +254,14 @@ d %>%
   geom_histogram(aes(days_since_aug_1), color = 'black', fill = 'grey',
                  bins = 6)
 
-# plot the estimated trends common between the two years ----
+# plot the estimated common trends between the two years ----
 newd <-
   expand.grid(date = seq(as.Date('2021-09-01'),
                          as.Date('2022-05-30'),
                          length.out = 400),
               sex_treatment = unique(d$sex_treatment),
               study_year = 'new year',
-              animal = 'new animal',
+              animal_year = 'new animal',
               s_t_y = 'new s_t_y') %>%
   mutate(days_since_aug_1 = if_else(
     # if in Aug, Sept, Oct, Nov, or Dec
@@ -290,7 +355,7 @@ newd_years <-
                          length.out = 400),
               sex_treatment = unique(d$sex_treatment),
               study_year = 1:2,
-              animal = 'new animal') %>%
+              animal_year = 'new animal') %>%
   mutate(s_t_y = paste(sex_treatment, study_year),
          days_since_aug_1 = if_else(
            # if in Aug, Sept, Oct, Nov, or Dec
