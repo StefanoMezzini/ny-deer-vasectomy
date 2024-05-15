@@ -8,18 +8,16 @@ library(magrittr)
 library(doParallel)
 library(foreach)
 
-setwd("D:/R_projects/AnimalMovement/")
-
-source("R_scripts/Moving_window/5_1_moving_window_functions.R")
+source("analysis/petar-code/5_1_moving_window_functions.R")
 
 # Read the datasets
 # ------------------------------------------------------------------------------
 
-data.y1 <- data.table::fread("Data/moving_window/Year_1_processed_data.csv",
+data.y1 <- data.table::fread("data/Year_1_processed_data.csv",
                              stringsAsFactors = FALSE,
                              header = TRUE) %>%
   as.data.frame()
-data.y2 <- data.table::fread("Data/moving_window/Year_2_processed_data.csv",
+data.y2 <- data.table::fread("data/Year_2_processed_data.csv",
                              stringsAsFactors = FALSE,
                              header = TRUE) %>%
   as.data.frame()
