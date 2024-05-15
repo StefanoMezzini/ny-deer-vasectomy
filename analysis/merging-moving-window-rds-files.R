@@ -12,28 +12,39 @@ files <- list.files(path = 'data',
 length(files) # should be 124
 
 # import moving window data
-d <- map_dfr(files,
-             function(.filename) {
-               year <- substr(.filename,
-                              nchar('data/Year-x'),
-                              nchar('data/Year-x'))
-               
-               .d <- readRDS(.filename) %>%
-                 select(! distance_est:distance_upr) %>%
-                 mutate(study_year = as.numeric(year)) %>%
-                 relocate(study_year, .before = 1)
-               # some datasets extra unnecessary columns
-               if('d.length' %in% colnames(.d)) {
-                 .d <- select(.d, ! d.length)
-               }
-               if('d.length.int' %in% colnames(.d)) {
-                 .d <- select(.d, ! d.length.int)
-               }
-               return(.d)
-             }) %>%
-  rename(animal = ind.id)
+d <- map_dfr(
+  files,
+  function(.filename) {
+    year <- substr(.filename,
+                   nchar('data/Year-x'),
+                   nchar('data/Year-x'))
+    
+    .d <- readRDS(.filename) %>%
+      select(! distance_est:distance_upr) %>%
+      select(! ind.id) %>% # ID is incorrect
+      mutate(study_year = as.numeric(year),
+             animal =
+               substr(.filename, nchar('data/Year X/X'), nchar(files)) %>%
+               gsub(pattern = '-.*', perl = TRUE,
+                    replacement = '')) %>%
+      relocate(study_year, .before = 1) %>%
+      relocate(animal, .before = 1)
+    
+    # some datasets extra unnecessary columns
+    if('d.length' %in% colnames(.d)) {
+      .d <- select(.d, ! d.length)
+    }
+    if('d.length.int' %in% colnames(.d)) {
+      .d <- select(.d, ! d.length.int)
+    }
+    
+    return(.d)
+  })
 
 colnames(d)
+n_distinct(d$animal) # should be 114
+n_distinct(paste(d$animal, d$study_year)) # should be 124
+unique(d$animal)
 
 # drop windows with insufficient data
 filter(d, map_chr(model, \(x) class(x)) != 'ctmm')$model
@@ -98,6 +109,11 @@ d <-
            (study_year == 1 & animal %in% c('12', '14b', '15b', '16')) |
            (study_year == 2 & animal %in% c('1', '16', '123')))
 
+# count number of deer per site and sex
+d %>%
+  group_by(sex_treatment, study_year) %>%
+  summarise(n_tel = n_distinct(animal_year))
+
 # check if fawns have been assigned correctly
 filter(d, has_fawn) %>%
   group_by(study_year) %>%
@@ -110,7 +126,7 @@ d %>%
   group_by(study_site, study_year) %>%
   summarize(prop = mean(has_fawn))
 
-
+# make figure of doy and days since August 1st
 cowplot::plot_grid(
   ggplot() +
     geom_histogram(aes(yday(date)), d, fill = 'grey', color = 'black',
@@ -124,7 +140,7 @@ cowplot::plot_grid(
   ncol = 1)
 
 ggsave('figures/yday-days-since-august-first-hist.png',
-       width = 6, height = 6, dpi = 600, bg = 'white')
+       width = 6, height = 6, dpi = 600, bg = 'white', labels = 'AUTO')
 
 # save the final dataset ----
 saveRDS(object = d, file = 'data/years-1-and-2-data-akde.rds')
