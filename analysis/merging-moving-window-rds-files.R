@@ -137,10 +137,10 @@ cowplot::plot_grid(
                    center = 5, binwidth = 10) +
     labs(x = 'Days since August first', y = 'Count') +
     xlim(c(0, 370)),
-  ncol = 1)
+  ncol = 1, labels = 'AUTO')
 
 ggsave('figures/yday-days-since-august-first-hist.png',
-       width = 6, height = 6, dpi = 600, bg = 'white', labels = 'AUTO')
+       width = 6, height = 6, dpi = 600, bg = 'white')
 
 # save the final dataset ----
 saveRDS(object = d, file = 'data/years-1-and-2-data-akde.rds')
