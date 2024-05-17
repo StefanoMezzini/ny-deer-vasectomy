@@ -36,9 +36,9 @@ ggplot(d_int, aes(interval)) +
   labs(x = 'Sampling interval (hours; sqrt axis)', y = 'Count (sqrt axis)')
 
 # drop rows with NA or infinite speed
-d <- d %>%
-  filter(is.finite(speed_est)) %>% # loosing ~40% of the windows
-  mutate(dof_speed = map_dbl(model, ctmm:::DOF.speed))
+sum(is.finite(d$speed_est))
+mean(is.finite(d$speed_est)) # loosing ~40% of the windows
+d <- filter(d, is.finite(speed_est))
 
 range(d$dof_speed) # range may be ok
 hist(d$dof_speed)

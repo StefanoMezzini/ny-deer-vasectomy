@@ -9,8 +9,7 @@ source('functions/gammals-variance-simulation-cis.R')
 source('analysis/ref_dates.R')
 source('analysis/figures/default-theme.R')
 
-d <- readRDS('data/years-1-and-2-data-no-akde.rds') %>%
-  mutate(dof_area = map_dbl(model, ctmm:::DOF.area))
+d <- readRDS('data/years-1-and-2-data-no-akde.rds')
 
 # figure of HRs and ESS before filtering
 d %>%

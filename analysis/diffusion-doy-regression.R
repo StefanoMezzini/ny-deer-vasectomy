@@ -36,9 +36,8 @@ mean(d_int$interval > 2)
 mean(d_int$interval > 1.05)
 
 # drop rows with NA diffusion
-d <- d %>%
-  filter(! is.na(diffusion_est)) %>% # 67 NA values
-  mutate(dof_diffusion = map_dbl(model, \(.m) summary(.m)$DOF['diffusion']))
+sum(is.na(d$diffusion_est))
+d <- filter(d, ! is.na(diffusion_est)) # 68 NA values
 
 # some low values, but common between both males and females in Rockefeller
 quantile(d$dof_diffusion)
