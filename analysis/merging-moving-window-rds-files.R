@@ -76,12 +76,9 @@ d <-
   rename(tel = dataset) %>%
   select(study_year, animal, posixct, date,
          tel, model, akde,
-         # tau_p_units, tau_p_est, tau_p_lwr, tau_p_upr,
-         # tau_v_units, tau_v_est, tau_v_lwr, tau_v_upr,
-         speed_units, speed_est,
-         hr_units, hr_est_95, hr_lwr_95, hr_upr_95,
-         # hr_est_50, hr_lwr_50, hr_upr_50,
-         diffusion_units, diffusion_est) %>%
+         dof_area, hr_units, hr_est_95, hr_lwr_95, hr_upr_95,
+         dof_speed, speed_units, speed_est,
+         dof_diff, diffusion_units, diffusion_est) %>%
   # add metadata on each individual
   left_join(read.csv('data/reference_data.csv'),
             by = c('animal' = 'id', 'study_year')) %>%
