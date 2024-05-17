@@ -140,9 +140,10 @@ ggsave('figures/yday-days-since-august-first-hist.png',
        width = 6, height = 6, dpi = 600, bg = 'white')
 
 # save the final dataset ----
-saveRDS(object = d, file = 'data/years-1-and-2-data-akde.rds')
-
 # version without akdes to push to keep < 100 MB and push to GitHub
 d %>%
   select(! akde) %>%
   saveRDS(file = 'data/years-1-and-2-data-no-akde.rds')
+
+# version with AKDEs
+saveRDS(object = d, file = 'data/years-1-and-2-data-akde.rds')
