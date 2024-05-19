@@ -147,3 +147,23 @@ d %>%
 
 # version with AKDEs
 saveRDS(object = d, file = 'data/years-1-and-2-data-akde.rds')
+
+# create a csv of which animal is included in which analysis
+d_summary <-
+  d %>%
+  group_by(animal, study_year) %>%
+  summarise(
+    #' check if at least 1 value is not `NA`
+    has_hr = any(! is.na(hr_est_95)),
+    has_speed = any(! (is.na(speed_est) | is.infinite(speed_est))),
+    has_diffusion = any(! is.na(diffusion_est)),
+    #' check proportion of values that are not `NA`
+    prop_finite_hr = mean(! is.na(hr_est_95)) %>%
+      round(2),
+    prop_finite_speed = mean(! (is.na(speed_est) | is.infinite(speed_est))) %>%
+      round(2),
+    prop_finite_diffusion = mean(! is.na(diffusion_est)) %>%
+      round(2),
+    .groups = 'drop')
+
+write.csv(d_summary, 'data/ids-for-each-analysis.csv', row.names = FALSE)
