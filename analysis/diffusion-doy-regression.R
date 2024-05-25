@@ -40,8 +40,8 @@ sum(is.na(d$diffusion_est))
 d <- filter(d, ! is.na(diffusion_est)) # 68 NA values
 
 # some low values, but common between both males and females in Rockefeller
-quantile(d$dof_diffusion)
-ggplot(d, aes(dof_diffusion)) +
+quantile(d$dof_diff)
+ggplot(d, aes(dof_diff)) +
   facet_grid(sex ~ study_site) +
   geom_histogram()
 
@@ -69,8 +69,8 @@ ggsave('figures/diffusion-estimates.png', p_diffusion, width = 8,
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
-if(file.exists('models/m_diffusion-hgam-2024-05-13.rds')) {
-  m_diffusion <- readRDS('models/m_diffusion-hgam-2024-05-13.rds')
+if(file.exists('models/m_diffusion-hgamls-2024-05-.rds')) {
+  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-.rds')
 } else {
   # no clear temporal trends
   ggplot(d, aes(days_since_aug_1, diffusion_est, group = animal_year)) +
@@ -113,33 +113,40 @@ if(file.exists('models/m_diffusion-hgam-2024-05-13.rds')) {
   # setup takes ~15-20 minutes
   # fits in ~ 
   m_diffusion <- gam(list(
+    # linear predictor for the mean
     diffusion_est ~
+      # by smooths require a separate explicit intercept for each group
       0 + sex_treatment +
-      # average trends for each group
+      # temporal sex- and treatment-level trends with different smoothness
+      #' `k = 30` gives excessive wiggliness after estrous period
       s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
-      # average year-level deviations from the average for each group
+      # accounts for deviation from average between years
       s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'sz') +
       # invidual- and year-level deviations from the average
       s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
         xt = list(bs = 'cr')),
-    ~
-      0 + sex_treatment +
-      # average trends for each group
-      s(days_since_aug_1, by = sex_treatment, k = 5, bs = 'tp') +
-      # invidual- and year-level deviations from the average
-      s(animal_year, bs = 're')),
+    
+    # linear predictor for the scale (sigma2 = mu^2 * scale)
+    # allows mean-variance relationship to be different between sexes
+    # sex- and treatment-level trends over season
+    ~ 0 + sex_treatment +
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+      s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'sz') +
+      s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
+        xt = list(bs = 'cr'))),
+    
     family = gammals(),
     data = d,
     method = 'REML',
     control = gam.control(trace = TRUE))
   
-  appraise(m_diffusion, point_alpha = 0.05, n_bins = 30)
-  plot(m_diffusion, pages = 1, scale = 0)
-  summary(m_diffusion, re.test = FALSE)
-  
   saveRDS(m_diffusion,
           paste0('models/m_diffusion-hgamls-', Sys.Date(), '.rds'))
 }
+
+appraise(m_diffusion, point_alpha = 0.05, n_bins = 30)
+plot(m_diffusion, pages = 1, scale = 0)
+summary(m_diffusion, re.test = FALSE)
 
 # check what groups cause oddly large outliers
 mutate(d,
@@ -196,8 +203,7 @@ newd <-
                          length.out = 400),
               sex_treatment = unique(d$sex_treatment),
               study_year = 'new year',
-              animal = 'new animal',
-              s_t_y = 'new s_t_y') %>%
+              animal_year = 'new animal') %>%
   mutate(days_since_aug_1 = if_else(
     # if in Aug, Sept, Oct, Nov, or Dec
     month(date) >= 8,
@@ -210,39 +216,55 @@ newd <-
     site = substr(sex_treatment, 3,
                   nchar(as.character(sex_treatment))))
 
-preds_mu <- gammals_mean(model = m_diffusion, data = newd, nsims = 1e4,
-                         unconditional = FALSE,
-                         # not excluding the term results in NA
-                         exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
-                                     's(days_since_aug_1,study_year):sex_treatmentf staten_island',
-                                     's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
-                                     's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
-  group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
-  summarize(lwr_95 = quantile(mean, 0.025),
-            mu = quantile(mean, 0.500),
-            upr_95 = quantile(mean, 0.975),
-            .groups = 'drop') %>%
-  mutate(sex = case_when(sex == 'f' ~ 'Female',
-                         sex == 'm' ~ 'Male'),
-         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
-                          site == 'staten_island' ~ 'Staten Island'))
+if(file.exists('models/predictions/diffusion-preds_mu.rds')) {
+  preds_mu <- readRDS('models/predictions/diffusion-preds_mu.rds')
+} else {
+  preds_mu <- gammals_mean(model = m_diffusion, data = newd, nsims = 1e4,
+                           unconditional = FALSE,
+                           # not excluding the term results in NA
+                           exclude =
+                             c(paste0('s(days_since_aug_1,study_year):sex_treatment',
+                                      unique(d$sex_treatment)),
+                               's(days_since_aug_1,animal_year)',
+                               paste0('s.1(days_since_aug_1,study_year):sex_treatment',
+                                      unique(d$sex_treatment)),
+                               's.1(days_since_aug_1,animal_year)')) %>%
+    group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
+    summarize(lwr_95 = quantile(mean, 0.025),
+              mu = quantile(mean, 0.500),
+              upr_95 = quantile(mean, 0.975),
+              .groups = 'drop') %>%
+    mutate(sex = case_when(sex == 'f' ~ 'Female',
+                           sex == 'm' ~ 'Male'),
+           site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                            site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_mu, 'models/predictions/diffusion-preds_mu.rds')
+}
 
-preds_s <- gammals_var(model = m_diffusion, data = newd, nsims = 1e4,
-                       unconditional = FALSE,
-                       # not excluding the term results in NA
-                       exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
-                                   's(days_since_aug_1,study_year):sex_treatmentf staten_island',
-                                   's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
-                                   's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
-  group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
-  summarize(lwr_95 = quantile(variance, 0.025),
-            s2 = quantile(variance, 0.500),
-            upr_95 = quantile(variance, 0.975),
-            .groups = 'drop') %>%
-  mutate(sex = case_when(sex == 'f' ~ 'Female',
-                         sex == 'm' ~ 'Male'),
-         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
-                          site == 'staten_island' ~ 'Staten Island'))
+if(file.exists('models/predictions/diffusion-preds_s2.rds')) {
+  preds_s2 <- readRDS('models/predictions/diffusion-preds_s2.rds')
+} else {
+  preds_s2 <- gammals_var(model = m_diffusion, data = newd, nsims = 1e4,
+                          unconditional = FALSE,
+                          # not excluding the term results in NA
+                          exclude =
+                            c(paste0('s(days_since_aug_1,study_year):sex_treatment',
+                                     unique(d$sex_treatment)),
+                              's(days_since_aug_1,animal_year)',
+                              paste0('s.1(days_since_aug_1,study_year):sex_treatment',
+                                     unique(d$sex_treatment)),
+                              's.1(days_since_aug_1,animal_year)')) %>%
+    group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
+    summarize(lwr_95 = quantile(variance, 0.025),
+              s2 = quantile(variance, 0.500),
+              upr_95 = quantile(variance, 0.975),
+              .groups = 'drop') %>%
+    mutate(sex = case_when(sex == 'f' ~ 'Female',
+                           sex == 'm' ~ 'Male'),
+           site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                            site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_s2, 'models/predictions/diffusion-preds_s2.rds')
+}
 
 # mean diffusion
 DATES <- as.Date(c('2021-09-15', '2021-11-15', '2022-01-15', '2022-03-15',
@@ -265,9 +287,9 @@ p_mu <-
 ggsave('figures/diffusion-mean.png', p_mu, width = 8, height = 8, dpi = 600,
        bg = 'white')
 
-# standard deviation in diffusion ---
+# standard deviation in diffusion
 p_s <-
-  ggplot(preds_s) +
+  ggplot(preds_s2) +
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
@@ -290,7 +312,7 @@ newd_years <-
                          length.out = 400),
               sex_treatment = unique(d$sex_treatment),
               study_year = 1:2,
-              animal = 'new animal') %>%
+              animal_year = 'new animal') %>%
   mutate(s_t_y = paste(sex_treatment, study_year),
          days_since_aug_1 = if_else(
            # if in Aug, Sept, Oct, Nov, or Dec
@@ -304,31 +326,47 @@ newd_years <-
          site = substr(sex_treatment, 3,
                        nchar(as.character(sex_treatment))))
 
-preds_mu_years <-
-  gammals_mean(model = m_diffusion, data = newd_years, nsims = 1e4,
-               unconditional = FALSE) %>%
-  group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
-  summarize(lwr_95 = quantile(mean, 0.025),
-            mu = quantile(mean, 0.500),
-            upr_95 = quantile(mean, 0.975),
-            .groups = 'drop') %>%
-  mutate(sex = case_when(sex == 'f' ~ 'Female',
-                         sex == 'm' ~ 'Male'),
-         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
-                          site == 'staten_island' ~ 'Staten Island'))
+if(file.exists('models/predictions/diffusion-preds_mu_years.rds')) {
+  preds_mu_years <- readRDS('models/predictions/diffusion-preds_mu_years.rds')
+} else {
+  preds_mu_years <-
+    gammals_mean(model = m_diffusion, data = newd_years, nsims = 1e4,
+                 unconditional = FALSE,
+                 exclude =
+                   c('s(days_since_aug_1,animal_year)',
+                     's.1(days_since_aug_1,animal_year)')) %>%
+    group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
+    summarize(lwr_95 = quantile(mean, 0.025),
+              mu = quantile(mean, 0.500),
+              upr_95 = quantile(mean, 0.975),
+              .groups = 'drop') %>%
+    mutate(sex = case_when(sex == 'f' ~ 'Female',
+                           sex == 'm' ~ 'Male'),
+           site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                            site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_mu_years, 'models/predictions/diffusion-preds_mu_years.rds')
+}
 
-preds_s_years <-
-  gammals_var(model = m_diffusion, data = newd_years, nsims = 1e4,
-              unconditional = FALSE) %>%
-  group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
-  summarize(lwr_95 = quantile(variance, 0.025),
-            s2 = quantile(variance, 0.500),
-            upr_95 = quantile(variance, 0.975),
-            .groups = 'drop') %>%
-  mutate(sex = case_when(sex == 'f' ~ 'Female',
-                         sex == 'm' ~ 'Male'),
-         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
-                          site == 'staten_island' ~ 'Staten Island'))
+if(file.exists('models/predictions/diffusion-preds_s2_years.rds')) {
+  preds_s2_years <- readRDS('models/predictions/diffusion-preds_s2_years.rds')
+} else {
+  preds_s2_years <-
+    gammals_var(model = m_diffusion, data = newd_years, nsims = 1e4,
+                unconditional = FALSE,
+                exclude =
+                  c('s(days_since_aug_1,animal_year)',
+                    's.1(days_since_aug_1,animal_year)')) %>%
+    group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
+    summarize(lwr_95 = quantile(variance, 0.025),
+              s2 = quantile(variance, 0.500),
+              upr_95 = quantile(variance, 0.975),
+              .groups = 'drop') %>%
+    mutate(sex = case_when(sex == 'f' ~ 'Female',
+                           sex == 'm' ~ 'Male'),
+           site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                            site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_s2_years, 'models/predictions/diffusion-preds_s2_years.rds')
+}
 
 # mean diffusion
 p_mu_y <-
@@ -350,7 +388,7 @@ ggsave('figures/diffusion-mean-years.png',
 
 # variance in diffusion ---
 p_s_y <-
-  ggplot(preds_s_years, aes(group = sex_treatment)) +
+  ggplot(preds_s2_years, aes(group = sex_treatment)) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
