@@ -69,8 +69,8 @@ ggsave('figures/diffusion-estimates.png', p_diffusion, width = 8,
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
-if(file.exists('models/m_diffusion-hgamls-2024-05-.rds')) {
-  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-.rds')
+if(file.exists('models/m_diffusion-hgamls-2024-05-22.rds')) {
+  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-05-22.rds')
 } else {
   # no clear temporal trends
   ggplot(d, aes(days_since_aug_1, diffusion_est, group = animal_year)) +
@@ -284,8 +284,8 @@ p_mu <-
   ylab(expression(bold('Mean diffusion'~(km^2/day)))) +
   theme(legend.position = 'top'); p_mu
 
-ggsave('figures/diffusion-mean.png', p_mu, width = 8, height = 8, dpi = 600,
-       bg = 'white')
+ggsave('figures/diffusion-mean.png',
+       p_mu, width = 8, height = 8, dpi = 600, bg = 'white')
 
 # standard deviation in diffusion
 p_s <-
