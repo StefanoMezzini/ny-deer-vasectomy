@@ -29,7 +29,7 @@ d %>%
 ggsave('figures/hr-ess-relationship.png', width = 12, height = 6,
        units = 'in', dpi = 600, bg = 'white')
 
-# HR estimates with an ESS < 3 are likely biased
+# HR estimates with an ESS < 3 are more likely to be biased
 hist(d$dof_area, breaks = 100)
 quantile(d$dof_area, probs = c(0, 0.01, 0.02, 0.05))
 mean(d$dof_area < 3)
@@ -40,7 +40,7 @@ quantile(d$hr_est_95, probs = c(0.95, 0.98, 0.99, 1))
 mean(d$hr_est_95 > 10)
 
 # check relationship between HR and ESS
-plot(map_dbl(d$model, ctmm:::DOF.area), d$hr_est_95)
+plot(d$dof_area, d$hr_est_95)
 abline(v = 3, col = 'red') # ESS limit
 abline(h = 10, col = 'red') # arbitrary HR limit
 
@@ -60,8 +60,7 @@ p_hr <-
   scale_color_manual('Confirmed fawn', values = c('black', 'darkorange2'),
                      labels = c('No', 'Yes')) +
   labs(x = NULL,
-       y = expression(bold('Estimated 7-day space-use requirements'~
-                             (km^2)))) +
+       y = expression(bold('Estimated 7-day 7-day HR size'~(km^2)))) +
   theme(legend.position = 'top')
 p_hr
 
@@ -89,105 +88,40 @@ plot(hr_est_95 ~ dof_area, d)
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
-if(file.exists('models/m_hr-hgam-2024-05-12-poor-fit.rds')) {
-  m_hr <- readRDS('models/m_hr-hgam-2024-05-12-poor-fit.rds')
+if(file.exists('models/m_hr-hgamls.rds')) {
+  m_hr <- readRDS('models/m_hr-hgamls.rds')
 } else {
-  # fits in ~ 1 minute
-  m_hr <- bam(
-    hr_est_95 ~
-      # by smooths require a separate explicit intercept for each group
-      0 + sex_treatment +
-      # average trends for each group
-      s(days_since_aug_1, by = sex_treatment, k = 10, bs = 'tp') +
-      # average year-level deviations from the average for each group
-      s(days_since_aug_1, study_year, by = sex_treatment, k = 10, bs = 'sz') +
-      # invidual- and year-level deviations from the average
-      s(days_since_aug_1, animal_year, k = 10, bs = 'fs',
-        xt = list(bs = 'cr')),
-    family = Gamma(link = 'log'),
-    data = d,
-    method = 'fREML',
-    discrete = TRUE,
-    control = gam.control(trace = TRUE)); beepr::beep()
-  
-  saveRDS(m_hr, paste0('models/m_hr-hgam-', Sys.Date(), '-poor-fit.rds'))
-}
-
-#' *need a location-scale model*
-appraise(m_hr, point_alpha = 0.3)
-plot(m_hr, pages = 1, scheme = 0, scale = 0)
-summary(m_hr, re.test = FALSE)
-
-d <- mutate(d, e_hgam = resid(m_hr))
-
-# differences in variance between groups
-d %>%
-  group_by(sex_treatment) %>%
-  summarise(mean = mean(e_hgam),
-            sd = sd(e_hgam))
-
-ggplot(d) +
-  facet_wrap(~ sex_treatment) +
-  geom_histogram(aes(e_hgam), fill = 'grey80', color = 'black')
-
-# over-dispersion in all groups
-ggplot(d) +
-  facet_wrap(~ sex_treatment) +
-  geom_qq(aes(sample = e_hgam), alpha = 0.2) +
-  geom_qq_line(aes(sample = e_hgam), color = 'red')
-
-# the overdispersion occurs due to these large, sudden excursions
-d %>%
-  group_by(sex_treatment) %>%
-  filter(animal_year == first(animal_year)) %>%
-  ggplot() +
-  facet_wrap(~ sex_treatment) +
-  geom_line(aes(days_since_aug_1, e_hgam, group = animal_year))
-
-# SI female trends would be different if we could account for excursions
-mutate(d,
-       excursion = e_hgam > 0.5) %>%
-  ggplot(aes(days_since_aug_1, e_hgam)) +
-  facet_wrap(~ sex_treatment + excursion) +
-  geom_point(alpha = 0.2) +
-  geom_smooth(method = 'gam', formula = y ~ s(x, k = 10))
-
-if(FALSE) {
-  # bs = 'tp', k = 15: dev.expl = 60.1%
-  # bs = 'ad', k = 30: shows clear estrous cylcles (SIF), dev.expl = 68.2%
-  # bs = 'ad', k = 30, s(age) and ti(age, doy) by group: dev.expl = 69.3%
-  # bs = 'tp', k = 10, with REs for scale: dev.expl = 76.1%
-  # bs = 'tp', k = 15, with REs for scale: dev.expl = 76.4%
+  #' using `0 + sex_treatment` produces incorrect results when simulating
+  #' from the Lp matrix
   m_hr <- gam(formula = list(
     # linear predictor for the mean
     hr_est_95 ~
       # by smooths require a separate explicit intercept for each group
-      0 + sex_treatment +
+      sex_treatment +
       # temporal sex- and treatment-level trends with different smoothness
       #' `k = 30` gives excessive wiggliness after estrous period
-      s(days_since_aug_1, by = sex_treatment, k = 10, bs = 'tp') +
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
       # accounts for deviation from average between years
-      s(days_since_aug_1, study_year, by = sex_treatment, k = 10, bs = 'sz') +
-      s(animal_year, bs = 're'),
+      s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'sz') +
       # invidual- and year-level deviations from the average
-      # s(days_since_aug_1, animal_year, k = 10, bs = 'fs',
-        # xt = list(bs = 'cr')),
+      s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
+        xt = list(bs = 'cr')),
     
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
-    ~ 0 + sex_treatment +
-      s(days_since_aug_1, by = sex_treatment, k = 5, bs = 'tp') +
-      s(animal_year, bs = 're')),
+    ~ sex_treatment +
+      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
+      s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'sz') +
+      s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
+        xt = list(bs = 'cr'))),
     
     family = gammals(),
     data = d,
     method = 'REML',
     control = gam.control(trace = TRUE)); beepr::beep()
   
-  saveRDS(m_hr, paste0('models/m_hr-hgamls-', Sys.Date(), '.rds'))
-} else {
-  m_hr <- readRDS('models/m_hr-hgamls-2024-05-12.rds')
+  saveRDS(m_hr, paste0('models/m_hr-hgamls.rds'))
 }
 
 # residuals are still overdispersed
@@ -240,18 +174,10 @@ d %>%
   ylim(c(0, max(m_hr$model$hr_est_95))) +
   scale_color_manual('Deviance residuals > 3', values = 1:2) +
   scale_alpha_manual('Deviance residuals > 3', values = c(0.2, 1)) +
-  theme(legend.position = c(0.1, 0.93))
+  theme(legend.position.inside = c(0.1, 0.93))
 
 ggsave('figures/hr-model-obs-fitted.png', width = 12, height = 8,
        dpi = 600, bg = 'white')
-
-# check periods of oddly large outliers
-d %>%
-  filter(hr_est_95 > 4, m_hr$fitted.values[, 1] < 4) %>%
-  ggplot() +
-  facet_grid(study_site ~ sex) +
-  geom_histogram(aes(days_since_aug_1), color = 'black', fill = 'grey',
-                 bins = 6)
 
 # plot the estimated common trends between the two years ----
 newd <-
@@ -260,8 +186,7 @@ newd <-
                          length.out = 400),
               sex_treatment = unique(d$sex_treatment),
               study_year = 'new year',
-              animal_year = 'new animal',
-              s_t_y = 'new s_t_y') %>%
+              animal_year = 'new animal') %>%
   mutate(days_since_aug_1 = if_else(
     # if in Aug, Sept, Oct, Nov, or Dec
     month(date) >= 8,
@@ -274,39 +199,55 @@ newd <-
     site = substr(sex_treatment, 3,
                   nchar(as.character(sex_treatment))))
 
-preds_mu <- gammals_mean(model = m_hr, data = newd, nsims = 1e4,
-                         unconditional = FALSE,
-                         # not excluding the term results in NA
-                         exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
-                                     's(days_since_aug_1,study_year):sex_treatmentf staten_island',
-                                     's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
-                                     's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
-  group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
-  summarize(lwr_95 = quantile(mean, 0.025),
-            mu = quantile(mean, 0.500),
-            upr_95 = quantile(mean, 0.975),
-            .groups = 'drop') %>%
-  mutate(sex = case_when(sex == 'f' ~ 'Female',
-                         sex == 'm' ~ 'Male'),
-         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
-                          site == 'staten_island' ~ 'Staten Island'))
+if(file.exists('models/predictions/hr-preds_mu.rds')) {
+  preds_mu <- readRDS('models/predictions/hr-preds_mu.rds')
+} else {
+  preds_mu <- gammals_mean(model = m_hr, data = newd, nsims = 1e4,
+                           unconditional = FALSE, check_data = TRUE,
+                           # not excluding the term results in NA
+                           exclude =
+                             c(paste0('s(days_since_aug_1,study_year):sex_treatment',
+                                      unique(d$sex_treatment)),
+                               's(days_since_aug_1,animal_year)',
+                               paste0('s.1(days_since_aug_1,study_year):sex_treatment',
+                                      unique(d$sex_treatment)),
+                               's.1(days_since_aug_1,animal_year)')) %>%
+    group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
+    summarize(lwr_95 = quantile(mean, 0.025),
+              mu = quantile(mean, 0.500),
+              upr_95 = quantile(mean, 0.975),
+              .groups = 'drop') %>%
+    mutate(sex = case_when(sex == 'f' ~ 'Female',
+                           sex == 'm' ~ 'Male'),
+           site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                            site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_mu, 'models/predictions/hr-preds_mu.rds')
+}
 
-preds_s <- gammals_var(model = m_hr, data = newd, nsims = 1e4,
-                       unconditional = FALSE,
-                       # not excluding the term results in NA
-                       exclude = c('s(days_since_aug_1,study_year):sex_treatmentf rockefeller',
-                                   's(days_since_aug_1,study_year):sex_treatmentf staten_island',
-                                   's(days_since_aug_1,study_year):sex_treatmentm rockefeller',
-                                   's(days_since_aug_1,study_year):sex_treatmentm staten_island')) %>%
-  group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
-  summarize(lwr_95 = quantile(variance, 0.025),
-            s2 = quantile(variance, 0.500),
-            upr_95 = quantile(variance, 0.975),
-            .groups = 'drop') %>%
-  mutate(sex = case_when(sex == 'f' ~ 'Female',
-                         sex == 'm' ~ 'Male'),
-         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
-                          site == 'staten_island' ~ 'Staten Island'))
+if(file.exists('models/predictions/hr-preds_s2.rds')) {
+  preds_s2 <- readRDS('models/predictions/hr-preds_s2.rds')
+} else {
+  preds_s2 <- gammals_var(model = m_hr, data = newd, nsims = 1e4,
+                          unconditional = FALSE,
+                          # not excluding the term results in NA
+                          exclude =
+                            c(paste0('s(days_since_aug_1,study_year):sex_treatment',
+                                     unique(d$sex_treatment)),
+                              's(days_since_aug_1,animal_year)',
+                              paste0('s.1(days_since_aug_1,study_year):sex_treatment',
+                                     unique(d$sex_treatment)),
+                              's.1(days_since_aug_1,animal_year)')) %>%
+    group_by(date, sex_treatment, days_since_aug_1, sex, site) %>%
+    summarize(lwr_95 = quantile(variance, 0.025),
+              s2 = quantile(variance, 0.500),
+              upr_95 = quantile(variance, 0.975),
+              .groups = 'drop') %>%
+    mutate(sex = case_when(sex == 'f' ~ 'Female',
+                           sex == 'm' ~ 'Male'),
+           site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                            site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_s2, 'models/predictions/hr-preds_s2.rds')
+}
 
 # mean HR
 DATES <- as.Date(c('2021-09-15', '2021-11-15', '2022-01-15', '2022-03-15',
@@ -323,15 +264,15 @@ p_mu <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('Mean space-use requirements'~(km^2)))) +
+  ylab(expression(bold('Mean 7-day HR size'~(km^2)))) +
   theme(legend.position = 'top'); p_mu
 
 ggsave('figures/hr-mean.png',
        p_mu, width = 8, height = 8, dpi = 600, bg = 'white')
 
-# standard deviation in HR ---
+# standard deviation in HR ----
 p_s <-
-  ggplot(preds_s) +
+  ggplot(preds_s2) +
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
@@ -341,7 +282,7 @@ p_s <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('SD in space-use requirements'~(km^2)))) +
+  ylab(expression(bold('SD in 7-day HR size'~(km^2)))) +
   theme(legend.position = 'top'); p_s
 
 ggsave('figures/hr-sd.png',
@@ -368,31 +309,47 @@ newd_years <-
          site = substr(sex_treatment, 3,
                        nchar(as.character(sex_treatment))))
 
-preds_mu_years <-
-  gammals_mean(model = m_hr, data = newd_years, nsims = 1e4,
-               unconditional = FALSE) %>%
-  group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
-  summarize(lwr_95 = quantile(mean, 0.025),
-            mu = quantile(mean, 0.500),
-            upr_95 = quantile(mean, 0.975),
-            .groups = 'drop') %>%
-  mutate(sex = case_when(sex == 'f' ~ 'Female',
-                         sex == 'm' ~ 'Male'),
-         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
-                          site == 'staten_island' ~ 'Staten Island'))
+if(file.exists('models/predictions/hr-preds_mu_years.rds')) {
+  preds_mu <- readRDS('models/predictions/hr-preds_mu_years.rds')
+} else {
+  preds_mu_years <-
+    gammals_mean(model = m_hr, data = newd_years, nsims = 1e4,
+                 unconditional = FALSE,
+                 exclude =
+                   c('s(days_since_aug_1,animal_year)',
+                     's.1(days_since_aug_1,animal_year)')) %>%
+    group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
+    summarize(lwr_95 = quantile(mean, 0.025),
+              mu = quantile(mean, 0.500),
+              upr_95 = quantile(mean, 0.975),
+              .groups = 'drop') %>%
+    mutate(sex = case_when(sex == 'f' ~ 'Female',
+                           sex == 'm' ~ 'Male'),
+           site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                            site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_mu_years, 'models/predictions/hr-preds_mu_years.rds')
+}
 
-preds_s_years <-
-  gammals_var(model = m_hr, data = newd_years, nsims = 1e4,
-              unconditional = FALSE) %>%
-  group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
-  summarize(lwr_95 = quantile(variance, 0.025),
-            s2 = quantile(variance, 0.500),
-            upr_95 = quantile(variance, 0.975),
-            .groups = 'drop') %>%
-  mutate(sex = case_when(sex == 'f' ~ 'Female',
-                         sex == 'm' ~ 'Male'),
-         site = case_when(site == 'rockefeller' ~ 'Rockefeller',
-                          site == 'staten_island' ~ 'Staten Island'))
+if(file.exists('models/predictions/hr-preds_s2_years.rds')) {
+  preds_s2_years <- readRDS('models/predictions/hr-preds_s2_years.rds')
+} else {
+  preds_s_years <-
+    gammals_var(model = m_hr, data = newd_years, nsims = 1e4,
+                unconditional = FALSE,
+                exclude =
+                  c('s(days_since_aug_1,animal_year)',
+                    's.1(days_since_aug_1,animal_year)')) %>%
+    group_by(date, sex_treatment, days_since_aug_1, sex, site, study_year)%>%
+    summarize(lwr_95 = quantile(variance, 0.025),
+              s2 = quantile(variance, 0.500),
+              upr_95 = quantile(variance, 0.975),
+              .groups = 'drop') %>%
+    mutate(sex = case_when(sex == 'f' ~ 'Female',
+                           sex == 'm' ~ 'Male'),
+           site = case_when(site == 'rockefeller' ~ 'Rockefeller',
+                            site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_s2_years, 'models/predictions/hr-preds_s2_years.rds')
+}
 
 # mean HR
 p_mu_y <-
@@ -406,7 +363,7 @@ p_mu_y <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('Mean space-use requirements'~(km^2)))) +
+  ylab(expression(bold('Mean 7-day HR size'~(km^2)))) +
   theme(legend.position = 'top'); p_mu_y
 
 ggsave('figures/hr-mean-years.png',
@@ -424,7 +381,7 @@ p_s_y <-
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
-  ylab(expression(bold('SD in space-use requirements'~(km^2)))) +
+  ylab(expression(bold('SD in 7-day HR size'~(km^2)))) +
   theme(legend.position = 'top'); p_s_y
 
 ggsave('figures/hr-sd-years.png',

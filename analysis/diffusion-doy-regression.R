@@ -63,60 +63,26 @@ p_diffusion
 ggsave('figures/diffusion-estimates.png', p_diffusion, width = 8,
        height = 8, dpi = 600, bg = 'white')
 
-# fit a Hierarchical Generalized Additive Model ----
+# fit a Hierarchical Generalized Additive Model for Location and Scale ----
 # not using cyclic cubic splines because the gap is too big
 # for year 1 the gap is even bigger
 range(d$days_since_aug_1) # not close to 0 to 365
 365 - diff(range(d$days_since_aug_1))
 
-if(file.exists('models/m_diffusion-hgamls-2024-05-22.rds')) {
-  m_diffusion <- readRDS('models/m_diffusion-hgamls-2024-05-22.rds')
+if(file.exists('models/m_diffusion-hgamls.rds')) {
+  m_diffusion <- readRDS('models/m_diffusion-hgamls.rds')
 } else {
   # no clear temporal trends
   ggplot(d, aes(days_since_aug_1, diffusion_est, group = animal_year)) +
     facet_wrap(~ sex_treatment, scales = 'free') +
     geom_line(alpha = 0.3)
   
-  # fits in ~ 2 minutes
-  m_diffusion <- bam(
-    diffusion_est ~
-      0 + sex_treatment +
-      # average trends for each group
-      s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
-      # average year-level deviations from the average for each group
-      s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'sz') +
-      # invidual- and year-level deviations from the average
-      s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
-        xt = list(bs = 'cr')),
-    family = Gamma(link = 'log'),
-    data = d,
-    method = 'fREML',
-    discrete = TRUE,
-    control = gam.control(trace = TRUE))
-  
-  appraise(m_diffusion, point_alpha = 0.05, n_bins = 30)
-  plot(m_diffusion, pages = 1, scale = 0)
-  summary(m_diffusion, re.test = FALSE)
-  saveRDS(m_diffusion,
-          paste0('models/m_diffusion-hgam-', Sys.Date(), '.rds'))
-  
-  #' *need location-scale model*
-  mutate(d, e = resid(m_diffusion)) %>%
-    group_by(sex_treatment) %>%
-    summarize(mean = mean(e), sd = sd(e))
-  
-  mutate(d, e = resid(m_diffusion)) %>%
-    ggplot() +
-    facet_wrap(~ sex_treatment, scales = 'free_y') +
-    geom_histogram(aes(e))
-  
   # setup takes ~15-20 minutes
-  # fits in ~ 
   m_diffusion <- gam(list(
     # linear predictor for the mean
     diffusion_est ~
       # by smooths require a separate explicit intercept for each group
-      0 + sex_treatment +
+      sex_treatment +
       # temporal sex- and treatment-level trends with different smoothness
       #' `k = 30` gives excessive wiggliness after estrous period
       s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
@@ -129,7 +95,7 @@ if(file.exists('models/m_diffusion-hgamls-2024-05-22.rds')) {
     # linear predictor for the scale (sigma2 = mu^2 * scale)
     # allows mean-variance relationship to be different between sexes
     # sex- and treatment-level trends over season
-    ~ 0 + sex_treatment +
+    ~ sex_treatment +
       s(days_since_aug_1, by = sex_treatment, k = 15, bs = 'tp') +
       s(days_since_aug_1, study_year, by = sex_treatment, k = 15, bs = 'sz') +
       s(days_since_aug_1, animal_year, k = 15, bs = 'fs',
@@ -141,7 +107,7 @@ if(file.exists('models/m_diffusion-hgamls-2024-05-22.rds')) {
     control = gam.control(trace = TRUE))
   
   saveRDS(m_diffusion,
-          paste0('models/m_diffusion-hgamls-', Sys.Date(), '.rds'))
+          paste0('models/m_diffusion-hgamls.rds'))
 }
 
 appraise(m_diffusion, point_alpha = 0.05, n_bins = 30)
