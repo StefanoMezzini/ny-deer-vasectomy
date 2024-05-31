@@ -132,11 +132,11 @@ if(file.exists('models/m_density-hgamls.rds')) {
     data = d,
     method = 'REML',
     control = gam.control(trace = TRUE))
-  saveRDS(m_density, paste0('models/m_density-hgamls.rds'))
+  saveRDS(m_density, 'models/m_density-hgamls.rds')
 }
 
 appraise(m_density, point_alpha = 0.1, type = 'pearson')
-plot(m_density, pages = 1, scheme = 0)
+plot(m_density, pages = 1, scheme = 1)
 summary(m_density, re.test = FALSE) # good deviance explained
 
 # plot the estimated common trends between the two years ----
