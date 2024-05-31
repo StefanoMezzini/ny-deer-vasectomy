@@ -309,7 +309,7 @@ newd_years <-
                        nchar(as.character(sex_treatment))))
 
 if(file.exists('models/predictions/hr-preds_mu_years.rds')) {
-  preds_mu <- readRDS('models/predictions/hr-preds_mu_years.rds')
+  preds_mu_years <- readRDS('models/predictions/hr-preds_mu_years.rds')
 } else {
   preds_mu_years <-
     gammals_mean(model = m_hr, data = newd_years, nsims = 1e4,
@@ -332,7 +332,7 @@ if(file.exists('models/predictions/hr-preds_mu_years.rds')) {
 if(file.exists('models/predictions/hr-preds_s2_years.rds')) {
   preds_s2_years <- readRDS('models/predictions/hr-preds_s2_years.rds')
 } else {
-  preds_s_years <-
+  preds_s2_years <-
     gammals_var(model = m_hr, data = newd_years, nsims = 1e4,
                 unconditional = FALSE,
                 exclude =
@@ -353,6 +353,7 @@ if(file.exists('models/predictions/hr-preds_s2_years.rds')) {
 # mean HR
 p_mu_y <-
   ggplot(preds_mu_years) +
+  coord_cartesian(ylim = c(0, 10)) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
@@ -371,6 +372,7 @@ ggsave('figures/hr-mean-years.png',
 # variance in HR ---
 p_s_y <-
   ggplot(preds_s_years, aes(group = sex_treatment)) +
+  coord_cartesian(ylim = c(0, 3)) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
