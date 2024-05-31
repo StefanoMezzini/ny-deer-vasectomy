@@ -80,3 +80,10 @@ analysis/speed-diffusion.R
 analysis/vedba-process.R
 data/vedba-data-2021-11-25.csv
 /models/old-gams
+
+# HGAMs are too big
+models/m_density-hgam.rds
+models/m_density-hgamls.rds
+models/m_diffusion-hgamls.rds
+models/m_hr-hgamls.rds
+models/m_speed-hgamls.rds
