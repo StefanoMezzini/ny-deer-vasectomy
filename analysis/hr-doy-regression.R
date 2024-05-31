@@ -119,7 +119,7 @@ if(file.exists('models/m_hr-hgamls.rds')) {
     family = gammals(),
     data = d,
     method = 'REML',
-    control = gam.control(trace = TRUE)); beepr::beep()
+    control = gam.control(trace = TRUE))
   
   saveRDS(m_hr, paste0('models/m_hr-hgamls.rds'))
 }
@@ -164,7 +164,6 @@ d %>%
            case_when(sex == 'Males' ~ '',
                      sex == 'Females' & has_fawn ~ ' with known fawn',
                      sex == 'Females' & ! has_fawn ~ ' with unknown fawn'))) %>%
-  filter(dof_area > 10) %>%
   ggplot() +
   facet_grid(treatment ~ sex_fawn) +
   geom_point(aes(fitted, hr_est_95, color = large, alpha = large)) +
