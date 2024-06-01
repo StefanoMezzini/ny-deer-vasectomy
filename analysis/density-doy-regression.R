@@ -270,7 +270,7 @@ newd_years <-
                        nchar(as.character(sex_treatment))))
 
 if(file.exists('models/predictions/density-preds_mu_years.rds')) {
-  preds_mu <- readRDS('models/predictions/density-preds_mu_years.rds')
+  preds_mu_years <- readRDS('models/predictions/density-preds_mu_years.rds')
 } else {
   preds_mu_years <-
     betals_mean(model = m_density, data = newd_years, nsims = 1e4,
@@ -293,7 +293,7 @@ if(file.exists('models/predictions/density-preds_mu_years.rds')) {
 if(file.exists('models/predictions/density-preds_s2_years.rds')) {
   preds_s2_years <- readRDS('models/predictions/density-preds_s2_years.rds')
 } else {
-  preds_s_years <-
+  preds_s2_years <-
     betals_var(model = m_density, data = newd_years, nsims = 1e4,
                unconditional = FALSE,
                exclude =
@@ -331,7 +331,7 @@ ggsave('figures/density-mean-years.png',
 
 # variance in density ---
 p_s_y <-
-  ggplot(preds_s_years, aes(group = sex_treatment)) +
+  ggplot(preds_s2_years, aes(group = sex_treatment)) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
