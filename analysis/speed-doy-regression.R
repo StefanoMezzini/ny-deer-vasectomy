@@ -10,6 +10,7 @@ source('functions/gammals-variance-simulation-cis.R') # for gammals CIs
 source('analysis/ref_dates.R') # estimated start and end of estrous
 source('analysis/figures/default-theme.R') # for a common ggplot theme
 source('functions/predict_mh.R') # for predicting with Metropolis-Hastings
+source('analysis/figures/default-theme.R')
 
 d <- readRDS('data/years-1-and-2-data-no-akde.rds')
 
@@ -273,7 +274,10 @@ newd_years <-
          site = substr(sex_treatment, 3,
                        nchar(as.character(sex_treatment))))
 
-preds_mu_years <-
+if(file.exists('models/predictions/speed-preds_mu_years.rds')) {
+  preds_mu_years <- readRDS('models/predictions/speed-preds_mu_years.rds')
+} else {
+  preds_mu_years <-
   gammals_mean(model = m_speed, data = newd_years, nsims = 1e4,
                unconditional = FALSE,
                exclude =
@@ -288,8 +292,13 @@ preds_mu_years <-
                          sex == 'm' ~ 'Male'),
          site = case_when(site == 'rockefeller' ~ 'Rockefeller',
                           site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_mu_years, 'models/predictions/speed-preds_mu_years.rds')
+}
 
-preds_s_years <-
+if(file.exists('models/predictions/speed-preds_s2_years.rds')) {
+  preds_s2_years <- readRDS('models/predictions/speed-preds_s2_years.rds')
+} else {
+  preds_s2_years <-
   gammals_var(model = m_speed, data = newd_years, nsims = 1e4,
               unconditional = FALSE,
               exclude =
@@ -304,6 +313,8 @@ preds_s_years <-
                          sex == 'm' ~ 'Male'),
          site = case_when(site == 'rockefeller' ~ 'Rockefeller',
                           site == 'staten_island' ~ 'Staten Island'))
+  saveRDS(preds_s2_years, 'models/predictions/speed-preds_s2_years.rds')
+}
 
 # mean speed
 p_mu_y <-

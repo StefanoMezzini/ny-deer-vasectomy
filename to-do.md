@@ -1,5 +1,6 @@
 to do:
-  - set up MH sampler and use it to calculate CIs for all four analyses (HR, speed, diffusion, density)
+  - remove grid lines in speed figures (use common theme)
+  - accelerometry:
+    - P(state) ~ s(doy) + etc (`ocat`)
+    - N states ~ s(doy) + etc (`poisson`)
   - calculate speed variances for `Mecor`
-  - P(state) ~ s(doy) + etc
-  
