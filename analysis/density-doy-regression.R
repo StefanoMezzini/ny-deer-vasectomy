@@ -93,8 +93,7 @@ p_density <-
   scale_color_manual('Confirmed fawn', values = c('black', 'darkorange2'),
                      labels = c('No', 'Yes')) +
   labs(x = NULL,
-       y = expression(bold('Estimated 7-day space-use requirements'~
-                             (km^2)))) +
+       y = 'Estimated daily excursivity') +
   theme(legend.position = 'top')
 p_density
 
