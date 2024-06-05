@@ -336,7 +336,7 @@ ggsave('figures/speed-mean-years.png',
 
 # SD in speed ---
 p_s_y <-
-  ggplot(preds_s_years, aes(group = sex_treatment)) +
+  ggplot(preds_s2_years, aes(group = sex_treatment)) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
