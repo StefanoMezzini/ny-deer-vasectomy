@@ -60,7 +60,7 @@ p_hr <-
   scale_color_manual('Confirmed fawn', values = c('black', 'darkorange2'),
                      labels = c('No', 'Yes')) +
   labs(x = NULL,
-       y = expression(bold('Estimated 7-day 7-day HR size'~(km^2)))) +
+       y = expression(bold('Estimated 7-day HR size'~(km^2)))) +
   theme(legend.position = 'top')
 p_hr
 
@@ -124,7 +124,7 @@ if(file.exists('models/m_hr-hgamls.rds')) {
   saveRDS(m_hr, paste0('models/m_hr-hgamls.rds'))
 }
 
-# residuals are still overdispersed
+# residuals are ok
 appraise(m_hr, point_alpha = 0.1, n_bins = 30)
 plot(m_hr, pages = 1, scheme = 0)
 summary(m_hr, re.test = FALSE)
