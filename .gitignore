@@ -75,8 +75,6 @@ data/years-1-and-2-data-akde.rds
 models/full-telemetry-movement-models-2024-04-20.rds
 
 # ignore files for future analyses (for now)
-analysis/speed-diffusion-mecor.R
-analysis/speed-diffusion.R
 analysis/vedba-process.R
 data/vedba-data-2021-11-25.csv
 /models/old-gams
