@@ -55,7 +55,7 @@ ggplot(mutate(d, dt_h = factor(dt_h))) +
 
 # fit the naive model with lme4 ----
 m_lme4 <- lmer(log_speed ~ 1 + log_diffusion + dt_h +
-                 (1 | animal) + (log_diffusion | animal),
+                 (1 + log_diffusion | animal),
                data = d, REML = TRUE)
 
 # fit the error-corrected model ----
@@ -139,7 +139,8 @@ d <- mutate(
   mu_hat =
     summary(m_mecor)$c$coefficients['(Intercept)', 'Estimate'] +
     summary(m_mecor)$c$coefficients['dt_h', 'Estimate'] * dt_h +
-    log_diffusion * b1_mecor,
+    summary(m_mecor)$c$coefficients['cor_log_diffusion', 'Estimate'] *
+    log_diffusion,
   e = log_speed - mu_hat)
 plot(e ~ sqrt(dof_speed), d)
 plot(e ~ sqrt(dof_diff), d)
