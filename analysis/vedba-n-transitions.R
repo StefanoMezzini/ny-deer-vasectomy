@@ -205,4 +205,4 @@ p_years <-
   theme(legend.position = 'top'); p_years
 
 ggsave('figures/n-transitions-years.png',
-       p_years, width = 8, height = 8, dpi = 600, bg = 'white')
+       p_years, width = 16, height = 8, dpi = 600, bg = 'white')
