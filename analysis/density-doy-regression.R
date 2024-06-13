@@ -209,11 +209,10 @@ if(file.exists('models/predictions/density-preds_s2.rds')) {
 }
 
 # mean density
-DATES <- as.Date(c('2021-09-15', '2021-11-15', '2022-01-15', '2022-03-15',
-                   '2022-05-15'))
-LABS <- format(DATES, '%B 15')
+DATES <- as.Date(c('2021-10-01', '2021-12-01', '2022-02-01', '2022-04-01'))
+LABS <- format(DATES, '%B 1')
 p_mu <-
-  ggplot(preds_mu, aes(group = sex_treatment)) +
+  ggplot(preds_mu) +
   facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = lwr_95, ymax = upr_95, fill = site),
@@ -222,7 +221,8 @@ p_mu <-
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
-  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS,
+                     limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   ylab('Mean daily excursivity') +
   theme(legend.position = 'top'); p_mu
 
@@ -240,7 +240,8 @@ p_s <-
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
-  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS,
+                     limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   ylab('SD in daily excursivity') +
   theme(legend.position = 'top'); p_s
 
@@ -321,7 +322,8 @@ p_mu_y <-
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
-  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS,
+                     limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   ylab('Mean daily excursivity') +
   theme(legend.position = 'top'); p_mu_y
 
@@ -330,7 +332,7 @@ ggsave('figures/density-mean-years.png',
 
 # variance in density ---
 p_s_y <-
-  ggplot(preds_s2_years, aes(group = sex_treatment)) +
+  ggplot(preds_s2_years) +
   facet_grid(sex ~ paste('Year', study_year)) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(date, ymin = sqrt(lwr_95), ymax = sqrt(upr_95),
@@ -339,7 +341,8 @@ p_s_y <-
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
-  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS,
+                     limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   ylab('SD in daily excursivity') +
   theme(legend.position = 'top'); p_s_y
 
