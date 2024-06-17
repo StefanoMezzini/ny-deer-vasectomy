@@ -85,3 +85,6 @@ models/m_density-hgamls.rds
 models/m_diffusion-hgamls.rds
 models/m_hr-hgamls.rds
 models/m_speed-hgamls.rds
+
+# ignore GRC poster (only used for reference)
+talks/grc-poster.jpg
