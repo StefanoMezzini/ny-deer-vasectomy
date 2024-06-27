@@ -156,9 +156,8 @@ preds <- bind_cols(
          upr = exp(fit + 1.96 * se.fit))
 
 # create the plots
-DATES <- as.Date(c('2021-09-15', '2021-11-15', '2022-01-15', '2022-03-15',
-                   '2022-05-15'))
-LABS <- format(DATES, '%B 15')
+DATES <- as.Date(c('2021-10-01', '2021-12-01', '2022-02-01', '2022-04-01'))
+LABS <- format(DATES, '%B 1')
 
 p_mean <-
   ggplot(preds, aes(group = sex_treatment)) +
@@ -170,7 +169,8 @@ p_mean <-
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
-  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS,
+                     limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   ylab('Transitions between states in a day') +
   theme(legend.position = 'top'); p_mean
 
@@ -200,7 +200,8 @@ p_years <-
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   scale_linetype('Site') +
-  scale_x_continuous(NULL, breaks = DATES, labels = LABS) +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS,
+                     limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   ylab('Transitions between states in a day') +
   theme(legend.position = 'top'); p_years
 
