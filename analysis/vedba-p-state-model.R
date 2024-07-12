@@ -90,7 +90,9 @@ d %>%
   group_by(sex_treatment, state) %>%
   summarise(p_zero = mean(p_day == 0))
 
-min(filter(d, p_day > 0)$p_day)
+min(filter(d, p_day > 0)$p_day) # keep EPS < min(p | p > 0)
+EPS <- 1e-6
+min(filter(d, p_day > 0)$p_day) / EPS
 
 if(file.exists('models/m_active-hgam.rds')) {
   m_active <- readRDS('models/m_active-hgam.rds')
@@ -106,18 +108,25 @@ if(file.exists('models/m_active-hgam.rds')) {
       # invidual- and year-level deviations from the average
       s(days_since_aug_1, animal_year, by = sex_treatment, k = 10, bs = 'fs',
         xt = list(bs = 'cr')),
-    family = betar(link = 'logit', eps = 1e-2), #' higher `eps` because of 0s
+    family = betar(link = 'logit', eps = EPS), #' `eps` because of 0s
     data = d,
     subset = state == 'no activity',
     method = 'fREML',
     discrete = TRUE,
     control = gam.control(trace = TRUE))
   
-  draw(m_active, rug = FALSE)
+  draw(m_active, rug = FALSE, parametric = TRUE)
   beepr::beep()
   summary(m_active)
   saveRDS(m_active, paste0('models/m_active-hgam-', Sys.Date(), '.rds'))  
 }
+
+# group no activity into low (and high into medium) to only have 2 states
+d_joined <- d %>%
+  filter(state %in% c('no activity', 'low')) %>%
+  pivot_wider(names_from = state, values_from = p_day) %>%
+  mutate(p_low = `no activity` + low) %>%
+  select(- c(`no activity`, low))
 
 if(file.exists('models/m_low-hgam.rds')) {
   m_low <- readRDS('models/m_low-hgam.rds')
