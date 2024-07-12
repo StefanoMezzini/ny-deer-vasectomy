@@ -8,15 +8,11 @@ library('ggplot2')   # for fancy plots
 theme_set(theme_bw())
 
 # source custom functions
-setwd('~/GitHub/bc-mammals-speeds')
-source('functions/outlier_plots.R') # to plot outlier diagnostic plots
-source('functions/check_animal.R') # to run diagnostic plots
-source('functions/plot_adj.R') # to plot 20 adjacent locations
-source('functions/flag_outlier.R') # to mark outliers
-source('functions/remove_outlier_flags.R') # to start over with an animal
-
-# change wd back to current folder
-setwd('~/Work/vickie-de-nicola')
+source('../bc-mammals-temperature/functions/outlier_plots.R') # to plot outlier diagnostic plots
+source('../bc-mammals-temperature/functions/check_animal.R') # to run diagnostic plots
+source('../bc-mammals-temperature/functions/plot_adj.R') # to plot 20 adjacent locations
+source('../bc-mammals-temperature/functions/flag_outlier.R') # to mark outliers
+source('../bc-mammals-temperature/functions/remove_outlier_flags.R') # to start over with an animal
 
 # import the full dataset ----
 d <- bind_rows(readr::read_csv('data/Year_1_processed_data.csv',
