@@ -1,4 +1,4 @@
 to do:
-  - accelerometry:
-    - P(state) ~ s(doy) + etc (`ocat`)
-    - N states ~ s(doy) + etc (`poisson`)
+  - ovariectomy data: repeat same project as with vasectomy
+  - recreate figure of diffusion and speed robustness from poster
+  - review chapter 2 manuscript
