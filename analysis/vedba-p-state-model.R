@@ -27,7 +27,7 @@ d <- bind_rows(map_dfr(list.files('data/Year 1/time-state-per-day-data/',
          percent_n = `%_total_movements`,
          percent_day = `%_of_time_in_each_state`) %>%
   mutate(weight = n * percent_n,
-         p_day = percent_day  / 100,
+         p_day = percent_day / 100,
          animal_year = factor(paste(animal, study_year))) %>%
   # remove periods with problematically high proportion of no activity
   filter(
@@ -38,7 +38,7 @@ d <- bind_rows(map_dfr(list.files('data/Year 1/time-state-per-day-data/',
          (animal_year == '44 1'  & date >= as.Date('2022-02-26')) |
          (animal_year == '5b 1'  & date >= as.Date('2021-10-24')))) %>%
   # drop first 2 and last rows since they may have < 24 h and odd behavior
-  group_by(animal_year) %>%
+  group_by(animal_year, state) %>%
   arrange(date) %>%
   slice(- c(1:2, n())) %>%
   ungroup() %>%
@@ -58,7 +58,11 @@ d <- bind_rows(map_dfr(list.files('data/Year 1/time-state-per-day-data/',
              as.Date(date) - as.Date(paste0(year(date), '-08-01')),
              # otherwise calculate days since Aug 1 of previous year 
              as.Date(date) - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-           as.numeric()) # convert difftime to numeric
+           as.numeric()) %>% # convert difftime to numeric
+  # drop days with less than 99% of the data for a day
+  group_by(animal_year, days_since_aug_1) %>%
+  filter(sum(p_day) > 0.99) %>%
+  ungroup()
 
 # remaining proportions of high activity are ok
 d %>%
@@ -67,72 +71,65 @@ d %>%
   group_by(animal, study_year) %>%
   summarise(n_days = n(), which_days = paste(date, collapse = ', '))
 
-ggplot(d, aes(days_since_aug_1, percent_day)) +
-  facet_grid(study_site ~ sex + study_year) +
-  geom_point(aes(color = state), alpha = 0.2) +
-  geom_smooth(aes(group = state, fill = state), color = 'black', lwd = 2) +
-  geom_smooth(aes(color = state), se = FALSE) +
-  scale_color_manual('State', values = pal,
-                     aesthetics = c('color', 'fill')) +
-  labs(x = expression(Days~since~August~1^{st}),
-       y = 'Time spent per day (%)') +
-  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
-  theme(legend.position = 'top')
+# some days don't have rows for no or high activity
+d %>%
+  group_by(sex_treatment, state) %>%
+  summarise(n = n()) %>%
+  mutate(state = state,
+         missing = max(n) - n) %>%
+  filter(missing != 0)
+
+# only one state is missing for any row
+d %>%
+  group_by(animal_year, days_since_aug_1) %>%
+  summarize(n_misssing = 4 - n_distinct(state),
+            .groups = 'drop') %>%
+  filter(n_misssing != 0) %>%
+  pull(n_misssing) %>%
+  unique()
+
+# proportion of "no activity" state is quite low
+# proportion of "high" state is negligible
+# HGAMs of "no activity" state struggle to converge
+#' zeros and 1s are problematic for beta distributions; see `?betar`
+d %>%
+  group_by(state, sex_treatment) %>%
+  summarise(p = mean(p_day),
+            p_zero = mean(p_day == 0))
 
 ggplot(d, aes(p_day, fill = state, color = state)) +
   facet_grid(state ~ sex_treatment, scales = 'free') +
   geom_density(alpha = 0.5, show.legend = FALSE) +
   scale_color_manual('State', values = pal, aesthetics = c('color', 'fill'))
 
-min(d$p_day)
-
-d %>%
-  group_by(sex_treatment, state) %>%
-  summarise(p_zero = mean(p_day == 0))
-
+#' set `EPS` to shift values awt from zero
 min(filter(d, p_day > 0)$p_day) # keep EPS < min(p | p > 0)
 EPS <- 1e-6
-min(filter(d, p_day > 0)$p_day) / EPS
-
-if(file.exists('models/m_active-hgam.rds')) {
-  m_active <- readRDS('models/m_active-hgam.rds')
-} else {
-  m_active <- bam(
-    p_day ~
-      # by smooths require a separate explicit intercept for each group
-      sex_treatment +
-      # temporal sex- and treatment-level trends with different smoothness
-      s(days_since_aug_1, by = sex_treatment, k = 10, bs = 'tp') +
-      # accounts for deviation from average between years
-      s(days_since_aug_1, study_year, by = sex_treatment, k = 10, bs = 'sz') +
-      # invidual- and year-level deviations from the average
-      s(days_since_aug_1, animal_year, by = sex_treatment, k = 10, bs = 'fs',
-        xt = list(bs = 'cr')),
-    family = betar(link = 'logit', eps = EPS), #' `eps` because of 0s
-    data = d,
-    subset = state == 'no activity',
-    method = 'fREML',
-    discrete = TRUE,
-    control = gam.control(trace = TRUE))
-  
-  draw(m_active, rug = FALSE, parametric = TRUE)
-  beepr::beep()
-  summary(m_active)
-  saveRDS(m_active, paste0('models/m_active-hgam-', Sys.Date(), '.rds'))  
-}
+min(filter(d, p_day > 0)$p_day) / EPS #' compare `min` to `EPS`
 
 # group no activity into low (and high into medium) to only have 2 states
+# personally, I (Stefano) don't believe that VeDBA = 0 is a state separate
+# from the "low" state because it doesn't happen often enough to accurately
+# show when there is no activity (e.g., rest, sleep)
+# additionally, deer are in a "high" state even less often, so estimating
+# P(state = high) would be too hard and inaccurate
 d_joined <- d %>%
   filter(state %in% c('no activity', 'low')) %>%
+  select(c(date, animal, sex, study_site, study_year, animal_year,
+           sex_treatment, days_since_aug_1, state, p_day)) %>%
   pivot_wider(names_from = state, values_from = p_day) %>%
-  mutate(p_low = `no activity` + low) %>%
+  #' all days add to a proportion of 0.99 or higher, `NA`s should be ~0
+  mutate(`no activity` = if_else(is.na(`no activity`), 0, `no activity`),
+         p_low = `no activity` + low) %>%
   select(- c(`no activity`, low))
 
 if(file.exists('models/m_low-hgam.rds')) {
   m_low <- readRDS('models/m_low-hgam.rds')
 } else {
+  # fits in ~8 minutes
+  # k = 15 increases fitting time to ~28 minutes with excessive wiggliness
   m_low <- bam(
-    p_day ~
+    p_low ~
       # by smooths require a separate explicit intercept for each group
       sex_treatment +
       # temporal sex- and treatment-level trends with different smoothness
@@ -140,11 +137,9 @@ if(file.exists('models/m_low-hgam.rds')) {
       # accounts for deviation from average between years
       s(days_since_aug_1, study_year, by = sex_treatment, k = 10, bs = 'sz') +
       # invidual- and year-level deviations from the average
-      s(days_since_aug_1, animal_year, by = sex_treatment, k = 10, bs = 'fs',
-        xt = list(bs = 'cr')),
-    family = betar(link = 'logit'), #' higher `eps` because of 0s
-    data = d,
-    subset = state == 'low',
+      s(days_since_aug_1, animal_year, k = 10, bs = 'fs', xt = list(bs = 'cr')),
+    family = betar(link = 'logit'),
+    data = d_joined,
     method = 'fREML',
     discrete = TRUE,
     control = gam.control(trace = TRUE))
@@ -152,83 +147,133 @@ if(file.exists('models/m_low-hgam.rds')) {
   draw(m_low, rug = FALSE)
   beepr::beep()
   summary(m_low)
-  saveRDS(m_low, paste0('models/m_low-hgam-', Sys.Date(), '.rds'))
+  appraise(m_low, point_alpha = 0.1, type = 'pearson')
+  saveRDS(m_low, 'models/m_low-hgam.rds')
 }
 
-# newd <-
-#   expand.grid(date = seq(as.Date('2021-09-01'),
-#                          as.Date('2022-05-30'),
-#                          length.out = 400),
-#               state = unique(d$state),
-#               sex_treatment = unique(d$sex_treatment),
-#               study_year = 'new year',
-#               animal_year = 'new animal') %>%
-#   mutate(days_since_aug_1 = if_else(
-#     # if in Aug, Sept, Oct, Nov, or Dec
-#     month(date) >= 8,
-#     # then calculate days since Aug 1
-#     date - as.Date(paste0(year(date), '-08-01')),
-#     # otherwise calculate days since Aug 1 of previous year 
-#     date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
-#       as.numeric(),
-#     sex = substr(sex_treatment, 1, 1),
-#     site = substr(sex_treatment, 3,
-#                   nchar(as.character(sex_treatment))))
-# 
-# preds <- bind_cols(newd,
-#                    predict(m, newdata = newd, type = 'link',
-#                            se.fit = TRUE, unconditional = FALSE) %>%
-#                      bind_cols()) %>%
-#   # calculate predictions on probability scale
-#   mutate(mu = m$family$linkinv(fit) * 100,
-#          lwr = m$family$linkinv(fit - 1.96 * se.fit) * 100,
-#          upr = m$family$linkinv(fit + 1.96 * se.fit) * 100) %>%
-#   # make sure probabilities add up to 1
-#   group_by(sex_treatment, days_since_aug_1) %>%
-#   mutate(mu = mu / sum(mu) * 100,
-#          lwr = lwr / sum(lwr) * 100,
-#          upr = upr / sum(upr) * 100) %>%
-#   ungroup() %>%
-#   # add variables for faceting
-#   mutate(sex = substr(sex_treatment, 1, 1),
-#          study_site = substr(sex_treatment, 3,
-#                              nchar(as.character(sex_treatment))))
-# 
-# # create figures
-# DATES <- as.Date(c('2021-10-01', '2021-12-01', '2022-02-01', '2022-04-01'))
-# DATES_AUG_1 <- if_else(
-#   # if in Aug, Sept, Oct, Nov, or Dec
-#   month(DATES) >= 8,
-#   # then calculate days since Aug 1
-#   DATES - as.Date(paste0(year(DATES), '-08-01')),
-#   # otherwise calculate days since Aug 1 of previous year 
-#   DATES - as.Date(paste0(year(DATES) - 1, '-08-01'))) %>%
-#   as.numeric()
-# LABS <- format(DATES, '%B 1')
-# 
-# ggplot(d, aes(days_since_aug_1)) +
-#   facet_grid(study_site ~ sex) +
-#   geom_point(aes(y = percent_day, color = state), alpha = 0.1) +
-#   geom_ribbon(aes(ymin = lwr, ymax = upr, group = state), preds,
-#               alpha = 0.3) +
-#   geom_line(aes(y = mu, group = state), preds, color = 'black', lwd = 1.5) +
-#   geom_line(aes(y = mu, color = state), preds) +
-#   scale_color_manual('State', values = pal,
-#                      aesthetics = c('color', 'fill')) +
-#   scale_x_continuous(NULL, breaks = DATES_AUG_1, labels = LABS,
-#                      limits = c(61, 272)) +
-#   ylab('Time spent per day (%)') +
-#   guides(colour = guide_legend(override.aes = list(alpha = 1))) +
-#   theme(legend.position = 'top')
-# 
-# ggplot() +
-#   facet_grid(study_site ~ sex) +
-#   geom_area(aes(date, mu, color = state, fill = state), preds,
-#             position = position_stack(reverse = TRUE), alpha = 0.5, lwd = 1) +
-#   scale_fill_manual('State', values = pal,
-#                     aesthetics = c('color', 'fill')) +
-#   guides(colour = guide_legend(override.aes = list(alpha = 1))) +
-#   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
-#                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-#   scale_y_continuous('Time spent per day (%)', expand = c(0, 0)) +
-#   theme(legend.position = 'top')
+# make figures ----
+# create figures
+DATES <- as.Date(c('2021-10-01', '2021-12-01', '2022-02-01', '2022-04-01'))
+DATES_AUG_1 <- if_else(
+  # if in Aug, Sept, Oct, Nov, or Dec
+  month(DATES) >= 8,
+  # then calculate days since Aug 1
+  DATES - as.Date(paste0(year(DATES), '-08-01')),
+  # otherwise calculate days since Aug 1 of previous year
+  DATES - as.Date(paste0(year(DATES) - 1, '-08-01'))) %>%
+  as.numeric()
+LABS <- format(DATES, '%B 1')
+
+# overall mean
+newd <-
+  expand_grid(date = seq(as.Date('2021-09-01'),
+                         as.Date('2022-05-30'),
+                         length.out = 400),
+              sex_treatment = unique(d$sex_treatment),
+              study_year = 'new year',
+              animal_year = 'new animal') %>%
+  mutate(days_since_aug_1 = if_else(
+    # if in Aug, Sept, Oct, Nov, or Dec
+    month(date) >= 8,
+    # then calculate days since Aug 1
+    date - as.Date(paste0(year(date), '-08-01')),
+    # otherwise calculate days since Aug 1 of previous year
+    date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
+      as.numeric())
+
+preds <- bind_cols(
+  newd,
+  predict(m_low, newdata = newd, type = 'link', se.fit = TRUE,
+          unconditional = FALSE, discrete = FALSE,
+          terms = c('(Intercept)', 'sex_treatment',
+                    paste0('s(days_since_aug_1):sex_treatment',
+                           unique(d_joined$sex_treatment)))) %>%
+    bind_cols()) %>%
+  # calculate predictions on probability scale
+  mutate(mu = m_low$family$linkinv(fit),
+         lwr = m_low$family$linkinv(fit - 1.96 * se.fit),
+         upr = m_low$family$linkinv(fit + 1.96 * se.fit)) %>%
+  # add variables for faceting
+  mutate(sex = if_else(substr(sex_treatment, 1, 1) == 'f',
+                       'Female', 'Male'),
+         study_site = if_else(grepl('rockefeller', sex_treatment),
+                              'Rockefeller', 'Staten Island'))
+
+d_joined <- mutate(d_joined,
+                   sex = if_else(substr(sex_treatment, 1, 1) == 'f',
+                                 'Female', 'Male'),
+                   study_site = if_else(grepl('rockefeller', sex_treatment),
+                                        'Rockefeller', 'Staten Island'))
+
+p <- ggplot(preds, aes(date)) +
+  facet_grid(sex ~ .) +
+  geom_hline(yintercept = 0.5, color = 'grey', lty = 'dashed') +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = study_site), alpha = 0.5) +
+  geom_line(aes(y = mu, color = study_site), lwd = 1) +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS,
+                     limits = as.Date(c('2021-10-01', '2022-04-30'))) +
+  scale_y_continuous('Proportion of a day in low-activity state',
+                     limits = c(0, 1), expand = c(0, 0)) +
+  scale_color_brewer('Site', type = 'qual', palette = 1,
+                     aesthetics = c('color', 'fill')) +
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+  theme(legend.position = 'top', panel.spacing.y = unit(10, 'points'))
+
+ggsave('figures/p-low.png',
+       p, width = 8, height = 8, dpi = 600, bg = 'white')
+
+# differences between years
+newd_y <-
+  expand_grid(date = seq(as.Date('2021-09-01'),
+                         as.Date('2022-05-30'),
+                         length.out = 400),
+              sex_treatment = unique(d$sex_treatment),
+              study_year = unique(d$study_year),
+              animal_year = 'new animal') %>%
+  mutate(days_since_aug_1 = if_else(
+    # if in Aug, Sept, Oct, Nov, or Dec
+    month(date) >= 8,
+    # then calculate days since Aug 1
+    date - as.Date(paste0(year(date), '-08-01')),
+    # otherwise calculate days since Aug 1 of previous year
+    date - as.Date(paste0(year(date) - 1, '-08-01'))) %>%
+      as.numeric())
+
+preds_y <- bind_cols(
+  newd_y,
+  predict(m_low, newdata = newd_y, type = 'link', se.fit = TRUE,
+          unconditional = FALSE, discrete = FALSE,
+          terms = c('(Intercept)', 'sex_treatment',
+                    paste0('s(days_since_aug_1,study_year):sex_treatment',
+                           unique(d_joined$sex_treatment)),
+                    paste0('s(days_since_aug_1):sex_treatment',
+                           unique(d_joined$sex_treatment)))) %>%
+    bind_cols()) %>%
+  # calculate predictions on probability scale
+  mutate(mu = m_low$family$linkinv(fit),
+         lwr = m_low$family$linkinv(fit - 1.96 * se.fit),
+         upr = m_low$family$linkinv(fit + 1.96 * se.fit)) %>%
+  # add variables for faceting
+  mutate(sex = if_else(substr(sex_treatment, 1, 1) == 'f',
+                       'Female', 'Male'),
+         study_site = if_else(grepl('rockefeller', sex_treatment),
+                              'Rockefeller', 'Staten Island'))
+
+p_y <- ggplot(preds_y, aes(date)) +
+  facet_grid(sex ~ paste('Year', study_year)) +
+  geom_hline(yintercept = 0.5, color = 'grey', lty = 'dashed') +
+  geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = study_site), alpha = 0.5) +
+  geom_line(aes(y = mu, color = study_site), lwd = 1) +
+  scale_x_continuous(NULL, breaks = DATES, labels = LABS,
+                     limits = as.Date(c('2021-10-01', '2022-04-30'))) +
+  scale_y_continuous('Proportion of a day in low-activity state',
+                     limits = c(0, 1), expand = c(0, 0)) +
+  scale_color_brewer('Site', type = 'qual', palette = 1,
+                     aesthetics = c('color', 'fill')) +
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+  theme(legend.position = 'top', panel.spacing.y = unit(10, 'points'))
+
+ggsave('figures/p-low-years.png',
+       p_y, width = 16, height = 8, dpi = 600, bg = 'white')
