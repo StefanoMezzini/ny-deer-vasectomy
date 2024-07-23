@@ -132,7 +132,7 @@ cowplot::plot_grid(
   ggplot() +
     geom_histogram(aes(days_since_aug_1), d, fill = 'grey', color = 'black',
                    center = 5, binwidth = 10) +
-    labs(x = 'Days since August first', y = 'Count') +
+    labs(x = expression(bold(Days~since~August~1^bold(st))), y = 'Count') +
     xlim(c(0, 370)),
   ncol = 1, labels = 'AUTO')
 
