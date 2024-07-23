@@ -1,0 +1,48 @@
+---
+title: "Model summaries"
+output: pdf_document
+---
+
+```{r, echo=FALSE, eval=TRUE}
+library('mgcv')
+models <- list.files(path = '../models', pattern = 'm_', recursive = FALSE,
+                     full.names = TRUE)
+```
+
+# GPS data
+
+```{r}
+summary(readRDS('../models/m_hr-hgamls.rds'))
+```
+
+\clearpage
+
+```{r}
+summary(readRDS('../models/m_speed-hgamls.rds'))
+```
+
+\clearpage
+
+```{r}
+summary(readRDS('../models/m_diffusion-hgamls.rds'))
+```
+
+\clearpage
+
+```{r}
+summary(readRDS('../models/m_density-hgamls.rds'))
+```
+
+\clearpage
+
+# Accelerometry data
+
+```{r}
+summary(readRDS('../models/m_low-hgam.rds'))
+```
+
+\clearpage
+
+```{r}
+summary(readRDS('../models/m_n_transitions-hgam-2024-06-11.rds'))
+```
