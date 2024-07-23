@@ -64,6 +64,10 @@ d <- bind_rows(map_dfr(list.files('data/Year 1/time-state-per-day-data/',
   filter(sum(p_day) > 0.99) %>%
   ungroup()
 
+# deer 91 in year 2 likely has a malfunctioning collar
+# (see script for number of tansitions per day)
+d <- filter(d, animal_year != '91 2')
+
 # remaining proportions of high activity are ok
 d %>%
   filter(state == 'no activity') %>%
@@ -102,18 +106,13 @@ ggplot(d, aes(p_day, fill = state, color = state)) +
   geom_density(alpha = 0.5, show.legend = FALSE) +
   scale_color_manual('State', values = pal, aesthetics = c('color', 'fill'))
 
-#' set `EPS` to shift values awt from zero
-min(filter(d, p_day > 0)$p_day) # keep EPS < min(p | p > 0)
-EPS <- 1e-6
-min(filter(d, p_day > 0)$p_day) / EPS #' compare `min` to `EPS`
-
 # group no activity into low (and high into medium) to only have 2 states
 # personally, I (Stefano) don't believe that VeDBA = 0 is a state separate
 # from the "low" state because it doesn't happen often enough to accurately
 # show when there is no activity (e.g., rest, sleep)
 # additionally, deer are in a "high" state even less often, so estimating
 # P(state = high) would be too hard and inaccurate
-d_joined <- d %>%
+d <- d %>%
   filter(state %in% c('no activity', 'low')) %>%
   select(c(date, animal, sex, study_site, study_year, animal_year,
            sex_treatment, days_since_aug_1, state, p_day)) %>%
@@ -139,7 +138,7 @@ if(file.exists('models/m_low-hgam.rds')) {
       # invidual- and year-level deviations from the average
       s(days_since_aug_1, animal_year, k = 10, bs = 'fs', xt = list(bs = 'cr')),
     family = betar(link = 'logit'),
-    data = d_joined,
+    data = d,
     method = 'fREML',
     discrete = TRUE,
     control = gam.control(trace = TRUE))
@@ -187,7 +186,7 @@ preds <- bind_cols(
           unconditional = FALSE, discrete = FALSE,
           terms = c('(Intercept)', 'sex_treatment',
                     paste0('s(days_since_aug_1):sex_treatment',
-                           unique(d_joined$sex_treatment)))) %>%
+                           unique(d$sex_treatment)))) %>%
     bind_cols()) %>%
   # calculate predictions on probability scale
   mutate(mu = m_low$family$linkinv(fit),
@@ -199,7 +198,7 @@ preds <- bind_cols(
          study_site = if_else(grepl('rockefeller', sex_treatment),
                               'Rockefeller', 'Staten Island'))
 
-d_joined <- mutate(d_joined,
+d <- mutate(d,
                    sex = if_else(substr(sex_treatment, 1, 1) == 'f',
                                  'Female', 'Male'),
                    study_site = if_else(grepl('rockefeller', sex_treatment),
@@ -246,9 +245,9 @@ preds_y <- bind_cols(
           unconditional = FALSE, discrete = FALSE,
           terms = c('(Intercept)', 'sex_treatment',
                     paste0('s(days_since_aug_1,study_year):sex_treatment',
-                           unique(d_joined$sex_treatment)),
+                           unique(d$sex_treatment)),
                     paste0('s(days_since_aug_1):sex_treatment',
-                           unique(d_joined$sex_treatment)))) %>%
+                           unique(d$sex_treatment)))) %>%
     bind_cols()) %>%
   # calculate predictions on probability scale
   mutate(mu = m_low$family$linkinv(fit),
