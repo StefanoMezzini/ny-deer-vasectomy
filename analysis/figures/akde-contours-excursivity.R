@@ -24,11 +24,11 @@ ggplot() +
   geom_raster(aes(x / 1e3, y / 1e3, fill = layer), a) +
   geom_point(aes(x / 1e3, y / 1e3), tel, alpha = 0.5, pch = '.') +
   geom_path(aes(x / 1e3, y / 1e3), tel, alpha = 0.02) +
-  geom_contour(aes(x / 1e3, y / 1e3, z = layer), a, color = 'darkorange',
+  geom_contour(aes(x / 1e3, y / 1e3, z = layer), a, color = 'black',
                breaks = seq(0, 1, by = 0.1)) +
   scale_x_continuous('x (km)', expand = c(0, 0)) +
   scale_y_continuous('y (km)', expand = c(0, 0)) +
-  scale_fill_gradient('AKDE quantile', low = 'blue', high = 'white',
+  scale_fill_gradient('AKDE quantile', low = '#8b0000', high = 'white',
                       limits = c(0, 1), aesthetics = c('color', 'fill')) +
   theme(legend.position = 'inside', legend.position.inside = c(0.15, 0.8))
 
