@@ -7,7 +7,7 @@ library('terra')  # to work with rasters
 library('ggplot2') # for fancy figures
 source('analysis/figures/default-theme.R')
 
-tel <- d <- readRDS('models/full-telemetry-movement-models-2024-04-20.rds') %>%
+tel <- readRDS('models/full-telemetry-movement-models-2024-04-20.rds') %>%
   pull(tel) %>%
   first() %>%
   data.frame() %>%
@@ -28,7 +28,7 @@ ggplot() +
                breaks = seq(0, 1, by = 0.1)) +
   scale_x_continuous('x (km)', expand = c(0, 0)) +
   scale_y_continuous('y (km)', expand = c(0, 0)) +
-  scale_fill_gradient('Excursivity', low = 'blue', high = 'white',
+  scale_fill_gradient('AKDE quantile', low = 'blue', high = 'white',
                       limits = c(0, 1), aesthetics = c('color', 'fill')) +
   theme(legend.position = 'inside', legend.position.inside = c(0.15, 0.8))
 
