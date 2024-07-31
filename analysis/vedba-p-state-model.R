@@ -199,10 +199,10 @@ preds <- bind_cols(
                               'Rockefeller', 'Staten Island'))
 
 d <- mutate(d,
-                   sex = if_else(substr(sex_treatment, 1, 1) == 'f',
-                                 'Female', 'Male'),
-                   study_site = if_else(grepl('rockefeller', sex_treatment),
-                                        'Rockefeller', 'Staten Island'))
+            sex = if_else(substr(sex_treatment, 1, 1) == 'f',
+                          'Female', 'Male'),
+            study_site = if_else(grepl('rockefeller', sex_treatment),
+                                 'Rockefeller', 'Staten Island'))
 
 p <- ggplot(preds, aes(date)) +
   facet_grid(sex ~ .) +

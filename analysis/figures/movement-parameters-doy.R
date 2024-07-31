@@ -9,7 +9,6 @@ source('analysis/figures/default-theme.R')
 DATES <- as.Date(c('2021-10-01', '2021-12-01', '2022-02-01', '2022-04-01'))
 LABS <- format(DATES, '%B 1')
 
-# home-range size ----
 p_hr <-
   readRDS('models/predictions/hr-preds_mu.rds') %>%
   ggplot() +
