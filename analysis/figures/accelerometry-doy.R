@@ -77,7 +77,7 @@ p_p_low <-
   geom_line(aes(y = p_low_mu, color = study_site), lwd = 1) +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-  scale_y_continuous('Proportion of a day in low-activity state',
+  scale_y_continuous('Proportion of a day in no- or low-activity state',
                      limits = c(0, 1), expand = c(0, 0)) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
@@ -93,7 +93,7 @@ p_n <-
   geom_line(aes(y = n_mu, color = study_site), lwd = 1) +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-  scale_y_continuous('Number of transitions per hour') +
+  scale_y_continuous('Number of transitions per day') +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
   guides(colour = guide_legend(override.aes = list(alpha = 1))) +

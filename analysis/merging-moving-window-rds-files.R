@@ -123,22 +123,6 @@ d %>%
   group_by(study_site, study_year) %>%
   summarize(prop = mean(has_fawn))
 
-# make figure of doy and days since August 1st
-cowplot::plot_grid(
-  ggplot() +
-    geom_histogram(aes(yday(date)), d, fill = 'grey', color = 'black',
-                   center = 5, binwidth = 10) +
-    labs(x = 'Day of year', y = 'Count'),
-  ggplot() +
-    geom_histogram(aes(days_since_aug_1), d, fill = 'grey', color = 'black',
-                   center = 5, binwidth = 10) +
-    labs(x = expression(bold(Days~since~August~1^bold(st))), y = 'Count') +
-    xlim(c(0, 370)),
-  ncol = 1, labels = 'AUTO')
-
-ggsave('figures/yday-days-since-august-first-hist.png',
-       width = 6, height = 6, dpi = 600, bg = 'white')
-
 # save the final dataset ----
 # version without akdes to push to keep < 100 MB and push to GitHub
 d %>%
