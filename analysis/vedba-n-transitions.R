@@ -77,8 +77,8 @@ ggplot(d, aes(days_since_aug_1, n_transitions / 24)) +
   theme(legend.position = 'top')
 
 #' `n_transitions` is highly overdispersed for Pois because `V(Y) >> E(Y)`
-if(file.exists('models/m_n_transitions-hgam-2024-06-11.rds')) {
-  m_n_transitions <- readRDS('models/m_n_transitions-hgam-2024-06-11.rds')
+if(file.exists('models/m_n_transitions-hgam.rds')) {
+  m_n_transitions <- readRDS('models/m_n_transitions-hgam.rds')
 } else {
   m_n_transitions <- bam(
     n_transitions ~

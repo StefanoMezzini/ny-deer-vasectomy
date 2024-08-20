@@ -21,7 +21,7 @@ DATES_AUG_1 <- if_else(
 
 # predictions
 m_low <- readRDS('models/m_low-hgam.rds')
-m_n <- readRDS('models/m_n_transitions-hgam-2024-06-11.rds')
+m_n <- readRDS('models/m_n_transitions-hgam.rds')
 
 newd <-
   expand_grid(date = seq(as.Date('2021-10-01'),
