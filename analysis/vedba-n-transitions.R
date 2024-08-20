@@ -10,7 +10,7 @@ library('gratia')    # for ggplot-based model figures
 source('analysis/figures/default-theme.R')
 source('analysis/ref_dates.R')
 
-# model P(state) based on TOD, DOY, sex, location, etc.
+# model number of transitions/day based on TOD, DOY, sex, location, etc.
 d <- bind_rows(map_dfr(list.files('data/Year 1/transition-day-data/',
                                   pattern = '.xlsx', full.names = TRUE),
                        readxl::read_xlsx) %>%
@@ -54,7 +54,7 @@ ggplot(d, aes(days_since_aug_1, n_transitions / 24)) +
   facet_grid(study_site ~ sex + study_year) +
   geom_point(aes(color = animal_year == '91 2'), alpha = 0.2) +
   geom_hline(yintercept = 50) +
-  scale_color_manual('Is deer 91 in year 2?', values = 1:2) +
+  scale_color_manual('Deer 91 in year 2', values = 1:2) +
   labs(x = expression(Days~since~August~1^{st}),
        y = 'Number of transitions per hour') +
   theme(legend.position = 'top')
