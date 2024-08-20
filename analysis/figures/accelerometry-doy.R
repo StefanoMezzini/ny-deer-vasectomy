@@ -63,45 +63,44 @@ preds <- bind_cols(
               n_upr = m_n$family$linkinv(fit + 1.96 * se.fit))) %>%
   # add variables for faceting
   mutate(sex = if_else(substr(sex_treatment, 1, 1) == 'f',
-                       'Female', 'Male'),
+                       'Female', 'Male') %>%
+           factor(levels = c('Female', 'Male')),
          study_site = if_else(grepl('rockefeller', sex_treatment),
                               'Rockefeller', 'Staten Island'))
 
 p_p_low <-
   ggplot(preds, aes(date)) +
-  facet_grid(sex ~ .) +
   geom_hline(yintercept = 0.5, color = 'grey', lty = 'dashed') +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
-  geom_ribbon(aes(ymin = p_low_lwr, ymax = p_low_upr, fill = study_site),
-              alpha = 0.5) +
-  geom_line(aes(y = p_low_mu, color = study_site), lwd = 1) +
+  geom_ribbon(aes(ymin = p_low_lwr, ymax = p_low_upr, fill = study_site,
+                  group = sex_treatment), alpha = 0.3) +
+  geom_line(aes(y = p_low_mu, color = study_site, lty = sex), lwd = 1) +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-  scale_y_continuous('Proportion of a day in no- or low-activity state',
-                     limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous('Proportion of a day in\nno- or low-activity state') +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
-  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+  scale_linetype_manual('Sex', values = c(2, 1)) +
   theme(legend.position = 'none', panel.spacing.y = unit(10, 'points'))
 
 p_n <-
   ggplot(preds, aes(date)) +
-  facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
-  geom_ribbon(aes(ymin = n_lwr, ymax = n_upr, fill = study_site),
-              alpha = 0.5) +
-  geom_line(aes(y = n_mu, color = study_site), lwd = 1) +
+  geom_ribbon(aes(ymin = n_lwr, ymax = n_upr, fill = study_site,
+                  group = sex_treatment), alpha = 0.3) +
+  geom_line(aes(y = n_mu, color = study_site, lty = sex), lwd = 1) +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   scale_y_continuous('Number of transitions per day') +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill')) +
-  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+  scale_linetype_manual('Sex', values = c(2, 1)) +
   theme(legend.position = 'none', panel.spacing.y = unit(10, 'points'))
 
 plot_grid(get_plot_component(p_n + theme(legend.position = 'top'),
                              'guide-box-top'),
-          plot_grid(p_p_low, p_n, labels = 'AUTO', nrow = 1),
+          plot_grid(p_p_low, p_n, labels = 'AUTO', ncol = 1),
           ncol = 1, rel_heights = c(1, 10))
+
 ggsave('figures/mean-accelerometry-doy.png',
-       width = 16, height = 6 * 1.2, dpi = 600, bg = 'white')
+       width = 8, height = 6 * 1.1, dpi = 600, bg = 'white')
