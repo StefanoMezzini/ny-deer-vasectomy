@@ -97,8 +97,10 @@ p_n <-
   scale_linetype_manual('Sex', values = c(2, 1)) +
   theme(legend.position = 'none', panel.spacing.y = unit(10, 'points'))
 
-plot_grid(get_plot_component(p_n + theme(legend.position = 'top'),
-                             'guide-box-top'),
+plot_grid(get_plot_component(p_n +
+                               theme(legend.position = 'top',
+                                     legend.key.width = rel(2)),
+                             pattern = 'guide-box-top'),
           plot_grid(p_p_low, p_n, labels = 'AUTO', ncol = 1),
           ncol = 1, rel_heights = c(1, 10))
 

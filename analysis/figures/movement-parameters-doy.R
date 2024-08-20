@@ -99,7 +99,8 @@ make_plot <- function(filename) {
 plot_grid(
   get_plot_component(
     make_plot('models/predictions/hr-preds_mu.rds') +
-      theme(legend.position = 'top'),
+      theme(legend.position = 'top',
+            legend.key.width = rel(2)),
     pattern = 'guide-box-top', return_all = TRUE),
   plot_grid(
     make_plot('models/predictions/hr-preds_mu.rds') +
