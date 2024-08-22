@@ -28,7 +28,7 @@ p_hr <-
   facet_wrap(~ id, scales = 'free_y', drop = TRUE, nrow = 2) +
   geom_line() +
   labs(x = expression(bold('Days since August 1')^st),
-       y = expression(bold('Estimated 7-day space-use requirements'~
+       y = expression(bold('Estimated 7-day home-range size'~
                              (km^2)))) +
   scale_color_brewer('Study year', type = 'qual', palette = 2,
                      aesthetics = c('color', 'fill')) +
@@ -40,7 +40,7 @@ p_speed <-
   facet_wrap(~ id, scales = 'free_y', drop = TRUE, nrow = 2) +
   geom_line() +
   labs(x = expression(bold('Days since August 1')^st),
-       y = 'Estimated distance travelled (km/day)') +
+       y = 'Estimated distance traveled (km/day)') +
   scale_color_brewer('Study year', type = 'qual', palette = 2,
                      aesthetics = c('color', 'fill')) +
   theme(legend.position = 'none')
