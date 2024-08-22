@@ -229,7 +229,7 @@ p_mu <-
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-  ylab('Mean distance travelled (km/day)') +
+  ylab('Mean distance traveled (km/day)') +
   theme(legend.position = 'top'); p_mu
 
 ggsave('figures/speed-mean.png', p_mu, width = 8, height = 8, dpi = 600,
@@ -248,7 +248,7 @@ p_s <-
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-  ylab('SD in distance travelled (km/day)') +
+  ylab('SD in distance traveled (km/day)') +
   theme(legend.position = 'top'); p_s
 
 ggsave('figures/speed-sd.png', p_s, width = 8, height = 8, dpi = 600,
@@ -330,7 +330,7 @@ p_mu_y <-
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-  ylab('Mean distance travelled (km/day)') +
+  ylab('Mean distance traveled (km/day)') +
   theme(legend.position = 'top'); p_mu_y
 
 ggsave('figures/speed-mean-years.png',
@@ -349,7 +349,7 @@ p_s_y <-
   scale_linetype('Site') +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-  ylab('SD in distance travelled (km/day)') +
+  ylab('SD in distance traveled (km/day)') +
   theme(legend.position = 'top'); p_s_y
 
 ggsave('figures/speed-sd-years.png',

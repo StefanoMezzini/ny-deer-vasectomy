@@ -36,7 +36,7 @@ p_speed <-
                      aesthetics = c('color', 'fill')) +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
-  ylab('Mean distance travelled (km/day)') +
+  ylab('Mean distance traveled (km/day)') +
   theme(legend.position = 'none')
 
 p_diff <-
@@ -106,13 +106,13 @@ plot_grid(
     make_plot('models/predictions/hr-preds_mu.rds') +
       ylab(expression(bold('Mean 7-day HR size'~(km^2)))),
     make_plot('models/predictions/speed-preds_mu.rds') +
-      ylab('Mean distance travelled (km/day)'),
+      ylab('Mean distance traveled (km/day)'),
     make_plot('models/predictions/diffusion-preds_mu.rds') +
       ylab(expression(bold('Mean diffusion'~(km^2/day)))),
     make_plot('models/predictions/density-preds_mu.rds') +
       ylab('Mean daily excursivity'),
     labels = 'AUTO'),
-  ncol = 1, rel_heights = c(1, 10))
+  ncol = 1, rel_heights = c(1, 20))
 
 ggsave('figures/mean-movement-parameters-doy.png',
-       width = 16, height = 8 * 1.1, dpi = 600, bg = 'white')
+       width = 16, height = 8 * 1.05, dpi = 600, bg = 'white')
