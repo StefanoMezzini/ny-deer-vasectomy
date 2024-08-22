@@ -73,9 +73,9 @@ plot_grid(get_plot_component(p_hr + theme(legend.position = 'top'),
                              'guide-box-top'),
           plot_grid(p_hr, p_speed, p_diff, p_exc, labels = 'AUTO',
                     ncol = 2),
-          ncol = 1, rel_heights = c(1, 10))
+          ncol = 1, rel_heights = c(1, 20))
 ggsave('figures/mean-movement-parameters-doy-faceted.png',
-       width = 16, height = 12 * 1.1, dpi = 600, bg = 'white')
+       width = 16, height = 12 * 1.05, dpi = 600, bg = 'white')
 
 # single figure for all parameters with no faceting for ease of comparison ----
 make_plot <- function(filename) {
