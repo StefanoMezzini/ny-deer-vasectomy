@@ -1,1 +1,1 @@
-This code was written and run by Petar, not by Stefano.
+This code was written and run by Petar Bursac, not by Stefano.

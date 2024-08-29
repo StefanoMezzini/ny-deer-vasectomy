@@ -1,4 +1,4 @@
-# Author: Petar Bursac
+# Author: Petar Bursac (bursac.petar3@gmail.com)
 # Date: 11.11.2023.
 
 # Load major packages
@@ -6,8 +6,8 @@
 library(move)
 library(ctmm)
 
-library(dplyr)
 library(tidyverse)
+library(dplyr)
 library(magrittr)
 library(ggplot2)
 library(sf)
@@ -43,10 +43,6 @@ data.raw <- data.table::fread("Data/MoveBank_both_years/Odocoileus virginianus D
                               stringsAsFactors = FALSE,
                               header = TRUE) %>%
   as.data.frame()
-
-
-head(data.raw)
-dim(data.raw) 
 
 # Check the names
 names(data.raw)
@@ -85,33 +81,27 @@ data.raw %<>%
                 Month = substr(Date, 6, 7),
                 Day = substr(Date, 9, 10))
 
-head(data.raw)
 range(data.raw$timestamp) # check
 
+# check start and end date per individual
 data.raw %>%
   dplyr::group_by(`individual-local-identifier`) %>%
   dplyr::summarise(start_date = min(timestamp), 
                    end_date = max(timestamp)) %>%
-  as.data.frame() #%>%
+  as.data.frame()
 
 
 # Read table with additional information per individual
 # ------------------------------------------------------------------------------
 
-reference_data <- readxl::read_xlsx(path = "Data/MoveBank_both_years/reference_data.xlsx" , sheet = "Data") %>%
+reference_data <- readxl::read_xlsx(path = "Data/MoveBank_both_years/reference_data.xlsx", 
+                                    sheet = "Data") %>%
   as.data.frame()
 
 # Remove rows with tag - do not consider
 reference_data %<>% dplyr::filter(is.na(`X = do not consider`))
 
 head(reference_data)
-
-dim(reference_data) # 63 Year 1, 61 Year 2
-
-# Number of IDs in stydy_animal table
-unique(data.raw$`individual-local-identifier`) %in% reference_data$`animal-id`
-sum(unique(data.raw$`individual-local-identifier`) %in% reference_data$`animal-id`)
-
 
 # Check refrence data - ids in both years
 # ------------------------------------------------------------------------------
@@ -120,7 +110,6 @@ ids.dup <- c("51", "1123", "25", "4b", "16", "27", "29", "30", "43", "1")
 reference_data %>% dplyr::filter(`animal-id` %in% ids.dup)
 
 # 10 ids available in both years
-
 
 # Split to Year 1 and 2 and filter by unique id and date on-off
 # ------------------------------------------------------------------------------
@@ -271,14 +260,13 @@ data.y2 %>%
   dplyr::summarise(total = n())
 
 # Remove by transmission protocol
-
 data.y1 %>%  
   dplyr::group_by(`transmission-protocol`, `gps:fix-type-raw`) %>%
   dplyr::summarise(total = n())
 
 data.y2 %>%  
   dplyr::group_by(`transmission-protocol`, `gps:fix-type-raw`) %>%
-  dplyr::summarise(total = n())
+  dplyr::summarise(total = n()) 
 
 data.y1 %>%
   dplyr::filter(`transmission-protocol` == "")
@@ -308,7 +296,6 @@ data.y2 %>%
 # Average time per individual and 
 # Check for devices that only have 1 fix/every 4 hours
 # ------------------------------------------------------------------------------
-
 
 # Year 1
 average_time1 <-
@@ -380,6 +367,7 @@ gy2 <- ggplot(data = average_time2) +
 
 gr1 <- grid.arrange(gy1, gy2, ncol = 1)
 
+# export the plot
 ggsave(plot = gr1,
        filename = "Data/MoveBank_both_years/average_time_Year_1_and_2.jpg",
        width = 32,
@@ -387,7 +375,6 @@ ggsave(plot = gr1,
        units = "cm",
        device = "jpeg",
        dpi = 700)
-
 
 
 
@@ -404,38 +391,13 @@ sf::st_write(data.y2.sf, "Data/MoveBank_both_years/sf_year2.gpkg")
 dj.year1 <- sf::st_read("Data/MoveBank_both_years/sf_year1_disjoint.gpkg")
 dj.year2 <- sf::st_read("Data/MoveBank_both_years/sf_year2_disjoint.gpkg")
 
-
-dj.year1$event.id
-dj.year2$event.id
-
-dim(data.y1)
 data.y1 %<>% dplyr::filter(!(as.numeric(`event-id`) %in% as.numeric(dj.year1$event.id)))
-dim(data.y2)
 data.y2 %<>% dplyr::filter(!(as.numeric(`event-id`) %in% as.numeric(dj.year2$event.id)))
-
 
 
 # Export the results
 # ------------------------------------------------------------------------------
 write.csv(data.y1, file = "Data/MoveBank_both_years/Year_1_processed_data.csv")
 write.csv(data.y2, file = "Data/MoveBank_both_years/Year_2_processed_data.csv")
-
-
-
-data.y1.sf <- st_as_sf(data.y1, coords = c("location-long", "location-lat"), crs = 4326)
-data.y2.sf <- st_as_sf(data.y2, coords = c("location-long", "location-lat"), crs = 4326)
-
-sf::st_write(data.y1.sf, "Data/MoveBank_both_years/sf_year1_check_2.gpkg")
-sf::st_write(data.y2.sf, "Data/MoveBank_both_years/sf_year2_check_2.gpkg")
-
-
-
-
-
-
-
-
-
-
 
 
