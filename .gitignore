@@ -91,4 +91,8 @@ models/m_speed-hgamls.rds
 
 # ignore GRC poster (only used for reference)
 talks/grc-poster.jpg
+
 /data/movement-state-data
+
+# ignore comments on writing
+writing/comments
