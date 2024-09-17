@@ -21,11 +21,12 @@ a <- readRDS('models/full-telemetry-movement-models-2024-04-20.rds') %>%
   as.data.frame(xy = TRUE)
 
 ggplot() +
+  coord_equal() +
   geom_raster(aes(x / 1e3, y / 1e3, fill = layer), a) +
-  geom_point(aes(x / 1e3, y / 1e3), tel, alpha = 0.5, pch = '.') +
-  geom_path(aes(x / 1e3, y / 1e3), tel, alpha = 0.02) +
+  geom_point(aes(x / 1e3, y / 1e3), tel, pch = '.') +
+  geom_path(aes(x / 1e3, y / 1e3), tel, alpha = 0.1, linewidth = 0.1) +
   geom_contour(aes(x / 1e3, y / 1e3, z = layer), a, color = 'black',
-               breaks = seq(0, 1, by = 0.1)) +
+               breaks = seq(0, 1, by = 0.1), linewidth = 0.2) +
   scale_x_continuous('x (km)', expand = c(0, 0)) +
   scale_y_continuous('y (km)', expand = c(0, 0)) +
   scale_fill_gradient('AKDE quantile', low = '#8b0000', high = 'white',
