@@ -37,9 +37,14 @@ d_dt <- d %>%
 cowplot::plot_grid(
   ggplot(d_dt, aes(animal, dt)) +
     facet_grid(study_year ~ .) +
-    geom_vline(aes(xintercept = animal),
-               filter(d, duplicated(animal)) %>%
-                 select(! study_year), alpha = 0.1) +
+    geom_vline(aes(xintercept = animal), alpha = 0.1,
+               d %>%
+                 mutate(animal_year = paste(animal, study_year)) %>%
+                 group_by(animal_year) %>%
+                 slice(1) %>%
+                 ungroup() %>%
+                 filter(duplicated(animal)) %>%
+                 select(! study_year)) +
     geom_point(aes(shape = Sex, color = site)) +
     geom_text(aes(label = animal), filter(d_dt, dt > 2),
               nudge_y = -0.2, nudge_x = 0.5) +
