@@ -18,7 +18,8 @@ p_hr <-
               alpha = 0.3) +
   geom_line(aes(date, mu, color = site), lwd = 1) +
   scale_color_brewer('Site', type = 'qual', palette = 1,
-                     aesthetics = c('color', 'fill')) +
+                     aesthetics = c('color', 'fill'),
+                     labels = c('Control site', 'Vasectomy site')) +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   ylab(expression(bold('Mean 7-day HR size'~(km^2)))) +
@@ -75,7 +76,7 @@ plot_grid(get_plot_component(p_hr + theme(legend.position = 'top'),
                     ncol = 2),
           ncol = 1, rel_heights = c(1, 20))
 ggsave('figures/mean-movement-parameters-doy-faceted.png',
-       width = 16, height = 12 * 1.05, dpi = 600, bg = 'white')
+       width = 12, height = 9 * 1.05, dpi = 600, bg = 'white')
 
 # single figure for all parameters with no faceting for ease of comparison ----
 make_plot <- function(filename) {
@@ -88,7 +89,8 @@ make_plot <- function(filename) {
                     group = sex_treatment), alpha = 0.3) +
     geom_line(aes(date, mu, color = site, lty = sex), lwd = 1) +
     scale_color_brewer('Site', type = 'qual', palette = 1,
-                       aesthetics = c('color', 'fill')) +
+                       aesthetics = c('color', 'fill'),
+                       labels = c('Control site', 'Vasectomy site')) +
     theme(legend.position = 'top') +
     scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                        limits = as.Date(c('2021-10-01', '2022-04-30'))) +
@@ -115,4 +117,4 @@ plot_grid(
   ncol = 1, rel_heights = c(1, 20))
 
 ggsave('figures/mean-movement-parameters-doy.png',
-       width = 16, height = 8 * 1.05, dpi = 600, bg = 'white')
+       width = 12, height = 6 * 1.05, dpi = 600, bg = 'white')

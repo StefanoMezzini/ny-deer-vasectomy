@@ -70,25 +70,28 @@ preds <- bind_cols(
 
 p_p_low <-
   ggplot(preds, aes(date)) +
+  facet_grid(sex ~ .) +
   geom_hline(yintercept = 0.5, color = 'grey', lty = 'dashed') +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(ymin = p_low_lwr, ymax = p_low_upr, fill = study_site,
                   group = sex_treatment), alpha = 0.3) +
-  geom_line(aes(y = p_low_mu, color = study_site, lty = sex), lwd = 1) +
+  geom_line(aes(y = p_low_mu, color = study_site), lwd = 1) +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   scale_y_continuous('Proportion of a day in\nno- or low-activity state') +
   scale_color_brewer('Site', type = 'qual', palette = 1,
-                     aesthetics = c('color', 'fill')) +
+                     aesthetics = c('color', 'fill'),
+                     labels = c('Control site', 'Vasectomy site')) +
   scale_linetype_manual('Sex', values = c(2, 1)) +
   theme(legend.position = 'none', panel.spacing.y = unit(10, 'points'))
 
 p_n <-
   ggplot(preds, aes(date)) +
+  facet_grid(sex ~ .) +
   geom_vline(xintercept = REF_DATES[c(1, 3)], col = 'red') +
   geom_ribbon(aes(ymin = n_lwr, ymax = n_upr, fill = study_site,
                   group = sex_treatment), alpha = 0.3) +
-  geom_line(aes(y = n_mu, color = study_site, lty = sex), lwd = 1) +
+  geom_line(aes(y = n_mu, color = study_site), lwd = 1) +
   scale_x_continuous(NULL, breaks = DATES, labels = LABS,
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   scale_y_continuous('Number of transitions per day') +
@@ -101,8 +104,8 @@ plot_grid(get_plot_component(p_n +
                                theme(legend.position = 'top',
                                      legend.key.width = rel(2)),
                              pattern = 'guide-box-top'),
-          plot_grid(p_p_low, p_n, labels = 'AUTO', ncol = 1),
+          plot_grid(p_p_low, p_n, labels = 'AUTO', nrow = 1),
           ncol = 1, rel_heights = c(1, 10))
 
 ggsave('figures/mean-accelerometry-doy.png',
-       width = 8, height = 6 * 1.1, dpi = 600, bg = 'white')
+       width = 12, height = 4.5 * 1.1, dpi = 600, bg = 'white')
