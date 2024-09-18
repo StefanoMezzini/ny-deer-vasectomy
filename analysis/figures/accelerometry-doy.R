@@ -96,7 +96,8 @@ p_n <-
                      limits = as.Date(c('2021-10-01', '2022-04-30'))) +
   scale_y_continuous('Number of transitions per day') +
   scale_color_brewer('Site', type = 'qual', palette = 1,
-                     aesthetics = c('color', 'fill')) +
+                     aesthetics = c('color', 'fill'),
+                     labels = c('Control site', 'Vasectomy site')) +
   scale_linetype_manual('Sex', values = c(2, 1)) +
   theme(legend.position = 'none', panel.spacing.y = unit(10, 'points'))
 
