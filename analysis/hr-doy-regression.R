@@ -121,7 +121,7 @@ if(file.exists('models/m_hr-hgamls.rds')) {
     method = 'REML',
     control = gam.control(trace = TRUE))
   
-  saveRDS(m_hr, paste0('models/m_hr-hgamls.rds'))
+  saveRDS(m_hr, 'models/m_hr-hgamls.rds')
 }
 
 # residuals are ok
