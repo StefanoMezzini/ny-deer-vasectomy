@@ -74,7 +74,10 @@
     Vb <- vcov(model, unconditional = unconditional)
     ## which coefs go with the theta linear predictor
     theta_take <- grepl('^s\\.1', colnames(Xp)) |
-        colnames(Xp) %in% c('(Intercept).1')
+        colnames(Xp) %in% c('(Intercept).1',
+                            'sex_treatmentf staten_island.1',
+                            'sex_treatmentm rockefeller.1',
+                            'sex_treatmentm staten_island.1')
 
     ## Simulate from posterior using Gaussian approximation
     betas <- mvnfast::rmvn(n = nsims,
@@ -109,8 +112,11 @@
     Vb <- vcov(model, unconditional = unconditional)
     ## which coefs go with the theta linear predictor
     theta_take <- grepl('^s\\.1', colnames(Xp)) |
-        colnames(Xp) %in% c('(Intercept).1')
-
+      colnames(Xp) %in% c('(Intercept).1',
+                          'sex_treatmentf staten_island.1',
+                          'sex_treatmentm rockefeller.1',
+                          'sex_treatmentm staten_island.1')
+    
     ## Simulate from posterior using Gaussian approximation
     betas <- mvnfast::rmvn(n = nsims,
                            mu = coefs,
