@@ -203,7 +203,7 @@ plot_grid(get_plot_component(p_hr + theme(legend.position = 'top'),
           ncol = 1, rel_heights = c(1, 20))
 
 ggsave('figures/mean-movement-parameters-doy-faceted-with-data.png',
-       width = 12, height = 9 * 1.05, dpi = 600, bg = 'white')
+       width = 24, height = 9 * 1.05, dpi = 600, bg = 'white')
 
 # single figure for all parameters with no faceting for ease of comparison ----
 make_plot <- function(filename) {
