@@ -81,7 +81,7 @@ p_p_low <-
   scale_y_continuous('Proportion of a day in\nno- or low-activity state') +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill'),
-                     labels = c('Control site', 'Vasectomy site')) +
+                     labels = c('Control site', 'Treatment site')) +
   scale_linetype_manual('Sex', values = c(2, 1)) +
   theme(legend.position = 'none', panel.spacing.y = unit(10, 'points'))
 
@@ -97,7 +97,7 @@ p_n <-
   scale_y_continuous('Number of transitions per day') +
   scale_color_brewer('Site', type = 'qual', palette = 1,
                      aesthetics = c('color', 'fill'),
-                     labels = c('Control site', 'Vasectomy site')) +
+                     labels = c('Control site', 'Treatment site')) +
   scale_linetype_manual('Sex', values = c(2, 1)) +
   theme(legend.position = 'none', panel.spacing.y = unit(10, 'points'))
 
