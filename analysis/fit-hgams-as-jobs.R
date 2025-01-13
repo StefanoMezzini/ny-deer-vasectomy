@@ -10,6 +10,6 @@ rstudioapi::jobRunScript('analysis/diffusion-doy-regression.R',
                          name = 'diffusion',
                          workingDir = '.')
 
-rstudioapi::jobRunScript('analysis/density-doy-regression.R',
+rstudioapi::jobRunScript('analysis/excursivity-doy-regression.R',
                          name = 'density',
                          workingDir = '.')
