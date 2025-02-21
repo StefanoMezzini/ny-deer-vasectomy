@@ -11,3 +11,19 @@ tibble(sex = c('all', 'male', 'female', 'all', 'male', 'female'),
   mutate(perc = round(perc, 1),
          perc_se = round(perc_se, 1)) %>%
   as.data.frame() # to avoid rounding
+
+# Fisher's exact test ----
+# overall
+matrix(c(5, 64 - 5,
+         8, 60 - 8), ncol=2) %>%
+  fisher.test()
+
+# males
+matrix(c(3, 21 - 3,
+         2, 19 - 2), ncol=2) %>%
+  fisher.test()
+
+# females
+matrix(c(2, 43 - 2,
+         6, 41 - 6), ncol=2) %>%
+  fisher.test()
