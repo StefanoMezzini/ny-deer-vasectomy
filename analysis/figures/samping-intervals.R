@@ -47,11 +47,11 @@ cowplot::plot_grid(
                  select(! study_year)) +
     geom_point(aes(shape = Sex, color = site)) +
     geom_text(aes(label = animal), filter(d_dt, dt > 2),
-              nudge_y = -0.2, nudge_x = 0.5) +
+              nudge_y = -0.3, nudge_x = 1, size = 3, fontface = 'bold') +
     labs(x = NULL, y = 'Median sampling interval (hours)') +
     scale_color_brewer('Site', type = 'qual', palette = 1) +
-    theme(axis.text.x.bottom = element_text(angle = 90, face = 'plain',
-                                            size = 7),
+    theme(axis.text.x.bottom = element_text(angle = 90, face = 'bold',
+                                            size = 5),
           legend.position = 'top'),
   ggplot() +
     geom_histogram(aes(yday(date)), d, fill = 'grey', color = 'black',
@@ -60,9 +60,9 @@ cowplot::plot_grid(
   ggplot() +
     geom_histogram(aes(days_since_aug_1), d, fill = 'grey', color = 'black',
                    center = 5, binwidth = 10) +
-    labs(x = expression(bold(Days~since~August~1^bold(st))), y = 'Count') +
+    labs(x = expression(bold(Days~since~August~'1'^bold(st))), y = 'Count') +
     xlim(c(0, 370)),
   ncol = 1, labels = 'AUTO', rel_heights = c(1.5, 1, 1))
 
 ggsave('figures/dt-and-yday-days-since-august-first-hist.png',
-       width = 12, height = 8, dpi = 600, bg = 'white')
+       width = 10, height = 6.67, dpi = 600, bg = 'white')
